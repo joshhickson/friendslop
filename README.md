@@ -20,6 +20,18 @@ The boring parts of a multiplayer game, done once, so every new idea starts at t
 - Capture the flag, in first person
 - Control points
 
+## Languages
+
+**The alpha is mostly JavaScript, with a bit of [ws](https://github.com/websockets/ws) for WebSockets:** a Node.js server and a browser client. It's a proof of concept, picked because it's quick to build and runs everywhere.
+
+**friendslop isn't tied to JavaScript.** The plan is a documented network protocol for rooms, the lobby, game state, player input and bots. Anything that speaks it can join a room, whatever it's written in:
+
+- other server implementations
+- other clients, such as a Rust/WebAssembly client for fast loads on phones
+- bots in any language, from a short Python script to an AI agent
+
+Expect the JavaScript parts to be rewritten or joined by others as the project grows.
+
 ## License
 
-To be decided before the first release.
+[Apache-2.0](LICENSE). Use it, change it, and ship games with it, including commercial ones.
