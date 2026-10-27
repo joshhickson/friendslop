@@ -68,7 +68,37 @@ export const LIMITS = Object.freeze({
   MAX_MESSAGE_BYTES: 16 * 1024,
   MAX_RELAY_BYTES: 256 * 1024, // a `relay` message may be this big; every other message stays under MAX_MESSAGE_BYTES
   MAX_RELAY_MSGS: 512,
+  // Bytes kept free under MAX_MESSAGE_BYTES or MAX_RELAY_BYTES for the message around a payload
+  // ({"t":"relay","msgs":...} or {"t":"game","type":...,"data":...}). Every check of a payload
+  // uses this one margin, so a batch the runner accepts is never refused by the page.
+  ENVELOPE_BYTES: 256,
 });
+
+/**
+ * Byte length of `str` once UTF-8 encoded. With a `limit`, only the comparison with it is exact:
+ * the encode is skipped when the length alone says which side of the limit the bytes are on.
+ */
+export function utf8Bytes(str, limit) {
+  if (limit !== undefined) {
+    if (str.length > limit) return str.length; // every char is at least one byte
+    if (str.length * 3 <= limit) return str.length; // and at most three
+  }
+  return new globalThis.TextEncoder().encode(str).length;
+}
+
+/**
+ * UTF-8 bytes of `value` as JSON (0 for undefined), or Infinity if it is not plain data.
+ * What the server measures, since it counts the bytes that arrive.
+ */
+export function jsonBytes(value, limit) {
+  let s;
+  try {
+    s = JSON.stringify(value);
+  } catch {
+    return Infinity;
+  }
+  return s === undefined ? 0 : utf8Bytes(s, limit);
+}
 
 // No 0/O/1/I/L to keep codes easy to read out loud.
 export const ROOM_ID_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';

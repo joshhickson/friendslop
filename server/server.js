@@ -139,6 +139,7 @@ export async function createGameServer(config, { log = createLogger(config.logLe
   const bots = new BotManager({ config, log: log.child('bots'), gamesDir: config.gamesDir });
   const traffic = new TrafficMeter({ dailyMb: config.dailyTrafficMb, log: log.child('traffic') });
   const manager = new RoomManager({ config, log: log.child('rooms'), games, bots, traffic });
+  traffic.onHardLimit = () => manager.endMatchesOverBudget();
   const staticMounts = mounts(config);
   const remote = remoteSettings(config);
   const githubOrigin = new URL(config.githubApi).origin;

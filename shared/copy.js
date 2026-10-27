@@ -20,11 +20,14 @@ export const COPY = Object.freeze({
   hostCanCheat: "The host's computer runs the game, so the host could change the score. Choose your friends carefully.",
   hostLeft: 'The host left and took the whole game with them. Bold move. Back to the lobby.',
   dataBudget: "friendslop has used up today's internet. New games can start after midnight UTC. Matches already running can finish.",
+  dataBudgetEnded: "friendslop has used up today's internet and then some, so this match has to stop here. New games can start after midnight UTC.",
   idleClosed: 'Everyone went quiet, so we closed the room. No hard feelings.',
   forkTooOld: 'This game was built with an older friendslop, and they no longer speak the same language. Ask its maker to update their fork.',
   blocked: 'This game has been retired from friendslop.',
   gameCrashed: (msg) => `The game crashed: ${msg}. It took the match down with it, so you are back in the lobby. Tell its maker, who will want that message.`,
   gameTooChatty: 'The game sent far too many messages, so friendslop hung up on it. Ask its maker to send fewer, or to send them less often.',
+  // Filled into gameCrashed and gameWontLoad when the game's frame never said it was ready.
+  frameNeverStarted: 'the game frame never started',
   gameWontLoad: (msg) => `The game wouldn't load: ${msg}. Leave the room and try again, or tell its maker, who will want that message.`,
   gameLeftFriendslop: 'The game tried to wander off to some other website, and friendslop caught it at the door. Ask its maker to keep it inside the page.',
   badLink: (reason) => BAD_LINK[reason] ?? "Something went wrong with that link and we're not sure what. Check it and try again.",
@@ -43,6 +46,7 @@ export const COPY = Object.freeze({
   hostLoadFailed: "That game wouldn't load, so no room was made. Check that the link points at a game folder in a friendslop fork, then try again.",
   inspectTitle: 'Checking the game folder',
   firstLookNotNow: 'Not this one',
+  gameTooBigToHost: "This game describes itself at such length that friendslop can't carry it, so no room was made. Ask its maker to trim its settings, teams and text.",
 
   // Server error texts that have no spec line of their own.
   badSource: "That game's address didn't make sense to friendslop. Paste the link to the game folder again.",

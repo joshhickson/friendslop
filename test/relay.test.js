@@ -2,6 +2,7 @@ import { test, before, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { startServer, TestClient, sleep } from './helpers.js';
 import { COPY } from '../shared/copy.js';
+import { LIMITS } from '../shared/protocol.js';
 import starter from '../templates/starter/server.js';
 import dots from './fixtures/games/dots/server.js';
 
@@ -359,6 +360,93 @@ test('huge relays over the budget during a match end it, and the socket stays op
   assert.equal(end.result.text, COPY.gameTooChatty);
   s.host.send('ping', { c: 1 });
   await s.host.next((m) => m.t === 'pong', 10000);
+  assert.equal(s.host.ws.readyState, 1);
+});
+
+/** Round trip of one ping, in ms. */
+async function pingMs(c, n) {
+  const t0 = performance.now();
+  c.send('ping', { c: n });
+  await c.next((m) => m.t === 'pong' && m.c === n, 2000);
+  return performance.now() - t0;
+}
+
+test('a runner asking for more deliveries than its budget ends the match, and other rooms stay quick', { timeout: 15000 }, async () => {
+  const s = await setup();
+  await play(s);
+  const other = await client();
+  other.send('room:create', { name: 'Other', password: '', game: 'dots' });
+  await other.next((m) => m.t === 'welcome');
+  const ended = s.guest.next((m) => m.t === 'match:end', 5000);
+  // 40 messages fit the connection's relay bucket, but each holds 512 items for both players:
+  // about 41,000 deliveries against a budget of 4000 at once and 2000 a second.
+  const batch = Array.from({ length: LIMITS.MAX_RELAY_MSGS }, (_, i) => out('all', 'spam', i));
+  const pings = [];
+  for (let i = 0; i < 40; i++) {
+    relay(s.host, batch);
+    if (i % 10 === 9) pings.push(await pingMs(other, i));
+  }
+  const end = await ended;
+  assert.equal(end.result.text, COPY.gameTooChatty);
+  assert.equal(end.result.error, true);
+  pings.push(await pingMs(other, 100));
+  assert.ok(Math.max(...pings) < 250, `another room's ping took ${Math.round(Math.max(...pings))} ms`);
+  const spam = gameTypes(s.guest).filter((t) => t === 'spam').length;
+  assert.ok(spam > 0 && spam < 3000, `the guest got ${spam} items`);
+  assert.equal(s.host.ws.readyState, 1, 'the host stays connected');
+});
+
+test('a 60 Hz broadcast to a full room stays inside the delivery budget', { timeout: 20000 }, async () => {
+  // 20 players (2 people and 18 bots) and 4 spectators: every broadcast reaches 24 seats.
+  const s = await setup({ ...metaOf(dots, true), maxPlayers: 20 });
+  s.host.send('room:bots', { add: 18 });
+  await s.host.roomWhere((x) => x.players.filter((p) => p.bot).length === 18);
+  const watchers = [];
+  for (let i = 0; i < 4; i++) {
+    const w = await client();
+    w.send('room:join', { roomId: s.roomId, password: '', name: `Watch${i}` });
+    const ww = await w.next((m) => m.t === 'welcome');
+    assert.equal(ww.room.players.find((p) => p.id === ww.you).spectating, true);
+    watchers.push({ c: w, id: ww.you });
+  }
+  await play(s);
+  for (const w of watchers) w.c.send('match:ready');
+  for (const w of watchers) await s.host.waitFor(isEvent('join', (m) => m.id === w.id));
+  const t0 = performance.now();
+  for (let i = 0; i < 120; i++) {
+    relay(s.host, [out('all', 'state', { i, pos: [i, 0, i] })]);
+    const wait = t0 + ((i + 1) * 1000) / 60 - performance.now();
+    if (wait > 0) await sleep(wait);
+  }
+  await sync(s, 60);
+  for (const w of watchers) await w.c.waitFor((m) => m.t === 'game' && m.type === 'sync-60');
+  for (const c of [s.guest, ...watchers.map((w) => w.c)]) {
+    assert.equal(gameTypes(c).filter((t) => t === 'state').length, 120);
+  }
+  assert.ok(!s.guest.messages.some((m) => m.t === 'match:end'));
+});
+
+test('a stat text is cleaned before it reaches the scoreboard', async () => {
+  const s = await setup();
+  await play(s);
+  relay(s.host, [ctx('setStat', s.guestId, 'title', '‮evil\u0007  name​')]);
+  const r = await s.host.nextRoomWhere((x) => x.players.find((p) => p.id === s.guestId).stats.title !== undefined);
+  assert.equal(r.players.find((p) => p.id === s.guestId).stats.title, 'evil name');
+});
+
+test('relays dropped in the results period count toward the match, not as flood strikes', { timeout: 15000 }, async () => {
+  const s = await setup();
+  await play(s);
+  let closed = false;
+  s.host.ws.once('close', () => { closed = true; });
+  relay(s.host, [ctx('endMatch', { text: 'done' }, { resultsSeconds: 10 })]);
+  await s.host.roomWhere((x) => x.phase === 'results');
+  // Over the connection's relay bucket (960 at once): about 540 are dropped.
+  for (let i = 0; i < 1500; i++) relay(s.host, [{ k: 'out', to: 'nobody', type: 'late', data: i }]);
+  s.host.send('ping', { c: 7 });
+  await s.host.next((m) => m.t === 'pong', 5000);
+  await sleep(100);
+  assert.equal(closed, false);
   assert.equal(s.host.ws.readyState, 1);
 });
 

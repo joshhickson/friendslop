@@ -138,20 +138,22 @@ The maker's guide, with what to do and what the fence does and doesn't stop, is
 anyone can host a room just by visiting the site. In Render, choose **New > Blueprint** and pick this
 repo. It installs with `npm ci`, starts `node server/start.js`, and sets the public-server limits
 below. Point a CNAME for your domain at the service's `onrender.com` name and list both names in
-`ALLOWED_HOSTS`. The public server runs no game code, so it has no `GAMES_DIR`: every game on it comes
-from a link.
+`ALLOWED_HOSTS`. The public server runs no game code: its `GAMES_DIR` is `server/no-games/`, a folder
+that must stay empty, so every game on it comes from a link (a game committed to `games/` never runs there).
 
 - **The free plan sleeps** after 15 minutes without visitors. The first visitor after that waits
   about a minute while it wakes. A restart ends every room in progress.
 - **Rate limits use the first address in `X-Forwarded-For`** (`TRUST_PROXY=1`). On its first player
   connection the server logs which client-address headers the proxy sent, by name and count only.
 - **Free bandwidth is capped,** so `DAILY_TRAFFIC_MB` stops new rooms and matches once the day's
-  budget is used. Running matches finish, and the budget resets at midnight UTC.
+  budget is used. Running matches go on until the day's total reaches 1.25 times the budget, and then
+  they end too. The budget resets at midnight UTC.
   `/api/health` shows the day's total.
 - **Forgotten tabs don't stream all night:** `ROOM_IDLE_MS` closes a room when no human in it has
   sent anything for that long.
-- **It has no games of its own.** The home screen offers the paste-a-link box. Set `GAMES_DIR` to a
-  folder of games only if you want your own server to run some the old way.
+- **It has no games of its own.** The home screen offers the paste-a-link box. Keep
+  `server/no-games/` empty. Set `GAMES_DIR` to a folder of games only on your own server, if you want
+  it to run some the old way.
 
 ### Configuration
 
@@ -167,7 +169,7 @@ All settings are environment variables (or `--port`, `--host`, `--open` flags).
 | `TUNNEL` | off | `1` = same as `--tunnel` (Cloudflare quick tunnel, public URL) |
 | `TRUST_CLOUDFLARE` | off | `1` = use `Cf-Connecting-Ip` from local connections (on automatically with `--tunnel`) |
 | `CLOUDFLARED` | (auto) | path to a `cloudflared` binary to use instead of downloading one |
-| `GAMES_DIR` | `games/` | Folder of games your own server runs. Games shared by link don't use it, and the public server (`render.yaml`) sets none. |
+| `GAMES_DIR` | `games/` | Folder of games your own server runs. Games shared by link don't use it. The public server (`render.yaml`) points it at `server/no-games/`, which must stay empty. |
 | `DEFAULT_GAME` | (first game) | Game preselected on the home screen |
 | `MAX_ROOMS` | `100` | |
 | `MAX_PLAYERS_PER_ROOM` | `20` | Also capped by each game's `maxPlayers` |
@@ -176,7 +178,7 @@ All settings are environment variables (or `--port`, `--host`, `--open` flags).
 | `ROOM_CREATES_PER_MINUTE` | `10` | Rooms one address may create per minute |
 | `RECONNECT_GRACE_MS` | `20000` | How long a dropped player keeps their seat |
 | `ROOM_IDLE_MS` | `0` (off) | Close a room when no human in it has sent anything for this long |
-| `DAILY_TRAFFIC_MB` | `0` (off) | Data the server may send to players per UTC day before it refuses new rooms and matches |
+| `DAILY_TRAFFIC_MB` | `0` (off) | Data the server may send to players per UTC day before it refuses new rooms and matches. Running matches end at 1.25 times it. |
 | `GAME_CDN` | `https://cdn.jsdelivr.net/gh/` | Where games shared by link load from: `<GAME_CDN><user>/<repo>@<commit>/...` |
 | `THREE_BASE` | `https://cdn.jsdelivr.net/npm/three@0.186.1/` | Where the game frame loads three.js from |
 | `GITHUB_API` | `https://api.github.com` | Where the host's browser turns a branch name into a commit |

@@ -17,6 +17,11 @@ const TYPE_MAX = 64; // the same cap Connection puts on a player's game message 
 const WINNER_MAX = 64;
 const STAT_KEYS_MAX = 32; // distinct stat keys per player: every snapshot carries them all
 const RELAY_DROPS_MAX = 200; // relays the runner's connection may drop in one match before it ends
+// Deliveries a match may make: one per recipient of each `out` item, and one per `ctx` item.
+// A 60 Hz broadcast to a full room (24 seats) is about 1440 a second. An item over it is dropped
+// and counts toward RELAY_DROPS_MAX, so a game that keeps asking for more ends its match.
+const DELIVERIES_PER_SECOND = 2000;
+const DELIVERIES_BURST = 4000;
 
 const isPlain = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
@@ -47,6 +52,9 @@ export class RemoteMatch {
     this.relayDrops = 0;
     this.startedAt = Date.now();
     this.announceBucket = new TokenBucket(1, 5);
+    // One relay message can hold 512 items for every player in the room, so the cost of a relay
+    // is counted here, per delivery, not per message (Connection's relay bucket counts messages).
+    this.deliveries = new TokenBucket(DELIVERIES_PER_SECOND, DELIVERIES_BURST);
   }
 
   start() {
@@ -119,7 +127,11 @@ export class RemoteMatch {
     for (const item of msgs) {
       if (!isPlain(item)) continue;
       if (item.k === 'out') this.#out(item);
-      else if (item.k === 'ctx' && Array.isArray(item.args)) this.#ctx(item.op, item.args);
+      else if (item.k === 'ctx' && Array.isArray(item.args)) {
+        // Ending the match is never refused: it is where a game over its budget ends up anyway.
+        if (item.op !== 'endMatch' && !this.#spend(1)) continue;
+        this.#ctx(item.op, item.args);
+      }
     }
     return null;
   }
@@ -140,7 +152,7 @@ export class RemoteMatch {
     } else {
       return;
     }
-    if (targets.length === 0) return;
+    if (targets.length === 0 || !this.#spend(targets.length)) return;
     const raw = JSON.stringify({ t: S2C.GAME, type, data }); // serialize once for everyone
     for (const pid of targets) room.players.get(pid)?.conn?.sendRaw(raw);
   }
@@ -155,7 +167,8 @@ export class RemoteMatch {
         const ok = (typeof value === 'number' && Number.isFinite(value)) || (typeof value === 'string' && value.length <= STAT_TEXT_MAX);
         if (!ok) return;
         if (!Object.hasOwn(p.stats, key) && Object.keys(p.stats).length >= STAT_KEYS_MAX) return;
-        p.stats[key] = value;
+        // Text reaches every scoreboard, so it is cleaned like a name (no control or bidi characters).
+        p.stats[key] = typeof value === 'string' ? cleanText(value, STAT_TEXT_MAX) : value;
         room.markDirty();
         return;
       }
@@ -201,6 +214,13 @@ export class RemoteMatch {
 
   // ---- helpers ----
 
+  /** Takes `n` deliveries from the match's budget. Refused, the item is dropped and counted. */
+  #spend(n) {
+    if (this.deliveries.take(n)) return true;
+    this.relayDropped();
+    return false;
+  }
+
   #runner() {
     return this.room.players.get(this.runnerId)?.conn ?? null;
   }
@@ -219,7 +239,10 @@ export class RemoteMatch {
     this.#endSoon({ text: COPY.hostLeft, error: true });
   }
 
-  /** The runner's connection dropped a relay over its rate limit. Too many ends the match once. */
+  /**
+   * The runner's connection dropped a relay over its rate limit, or an item went over the match's
+   * delivery budget. Too many ends the match once.
+   */
   relayDropped() {
     if (this.ended || ++this.relayDrops !== RELAY_DROPS_MAX) return;
     this.log.warn(`runner dropped ${RELAY_DROPS_MAX} relays; ending the match`);

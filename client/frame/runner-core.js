@@ -6,7 +6,7 @@
 // It runs unchanged in Node (the tests) and in a browser worker, so it imports only by relative
 // path, uses no Node built-ins, and takes its clock and timers from the caller.
 
-import { C2S, S2C, LIMITS } from '../../shared/protocol.js';
+import { C2S, S2C, LIMITS, cleanText, jsonBytes } from '../../shared/protocol.js';
 import { COPY } from '../../shared/copy.js';
 
 const MAX_HOOK_ERRORS = 25; // the same limit as Match.call
@@ -23,13 +23,6 @@ const SILENT = Object.freeze({ debug() {}, info() {}, warn() {}, error() {} });
 export function describeGame(def, { hasBot = false } = {}) {
   const { create, ...rest } = def;
   return { ...JSON.parse(JSON.stringify(rest)), hasBot: hasBot === true };
-}
-
-/** Byte length of `str` once UTF-8 encoded, skipping the encode when the answer is obvious. */
-function utf8Bytes(str, limit) {
-  if (str.length > limit) return str.length; // every char is at least one byte
-  if (str.length * 3 <= limit) return str.length; // and at most three
-  return new globalThis.TextEncoder().encode(str).length;
 }
 
 /** A copy of `data` exactly as the wire would carry it. */
@@ -187,7 +180,9 @@ export function createRunner({ def, transport, loadBrain = async () => null, tim
     const msgs = items.map(({ item, json }) => (json === undefined ? item : { ...item, data: wireCopy(json) }));
     const msg = { t: C2S.RELAY, msgs };
     const tooMany = msgs.length > LIMITS.MAX_RELAY_MSGS;
-    if (tooMany || utf8Bytes(JSON.stringify(msg), LIMITS.MAX_RELAY_BYTES) > LIMITS.MAX_RELAY_BYTES) {
+    // The page (client/js/frame-host.js) makes the same check on the same array.
+    const maxBytes = LIMITS.MAX_RELAY_BYTES - LIMITS.ENVELOPE_BYTES;
+    if (tooMany || jsonBytes(msgs, maxBytes) > maxBytes) {
       // Sent, this would close the socket or be refused whole. End the match instead, once.
       if (!m.chatty) {
         m.chatty = true;
@@ -300,8 +295,10 @@ export function createRunner({ def, transport, loadBrain = async () => null, tim
           log.warn?.(`a player holds at most ${STAT_KEYS_MAX} stats; "${key}" ignored`);
           return;
         }
-        stats[key] = value;
-        push({ k: 'ctx', op: 'setStat', args: [id, key, value] });
+        // The server cleans text stats the same way, so the runner's copy matches the scoreboard.
+        const clean = typeof value === 'string' ? cleanText(value, STAT_TEXT_MAX) : value;
+        stats[key] = clean;
+        push({ k: 'ctx', op: 'setStat', args: [id, key, clean] });
       },
       addStat(target, key, delta = 1) {
         const id = live() ? resolve(target) : null;

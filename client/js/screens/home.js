@@ -2,7 +2,7 @@
 
 import { h } from '../dom.js';
 import { store, savedName } from '../state.js';
-import { C2S, S2C, LIMITS } from '/shared/protocol.js';
+import { C2S, S2C, LIMITS, jsonBytes } from '/shared/protocol.js';
 import { COPY } from '/shared/copy.js';
 import { parseGithubUrl, formatRef, parseRef, repoKey } from '/shared/gameref.js';
 import { resolveCommit, inspectGame } from '../github.js';
@@ -99,6 +99,9 @@ export function homeScreen(net, { prefillCode = '', preferGame = '', prefillHost
       const seen = await inspectGame(found.src, { container: inspectBox, net, store, signal: abort.signal });
       if (gone) return;
       if (seen.error) return fail(seen.error);
+      const create = { t: C2S.CREATE, name: n, password: hostPw.value, source: found.src, def: seen.meta };
+      // The server closes the socket on a message over its limit, so say why here instead.
+      if (jsonBytes(create, LIMITS.MAX_MESSAGE_BYTES) > LIMITS.MAX_MESSAGE_BYTES) return fail(COPY.gameTooBigToHost);
       sent = true;
       net.send(C2S.CREATE, { name: n, password: hostPw.value, source: found.src, def: seen.meta });
     } catch (err) {

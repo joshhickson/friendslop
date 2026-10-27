@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseRef, formatRef, refBase, repoKey, parseGithubUrl } from '../shared/gameref.js';
 import { COPY } from '../shared/copy.js';
-import { ERRORS } from '../shared/protocol.js';
+import { ERRORS, LIMITS, utf8Bytes, jsonBytes } from '../shared/protocol.js';
 import { resolveCommit } from '../client/js/github.js';
 import { loadBlocklist } from '../server/blocklist.js';
 import { loadConfig } from '../server/config.js';
@@ -226,6 +226,20 @@ test('errors take their text from the copy', () => {
   assert.equal(ERRORS.traffic_budget, COPY.dataBudget);
   assert.equal(ERRORS.game_blocked, COPY.blocked);
   for (const code of ['bad_source', 'not_runner', 'relay_too_big']) assert.ok(ERRORS[code]?.length > 10, code);
+});
+
+test('sizes are measured in UTF-8 bytes, as the server counts them', () => {
+  assert.equal(utf8Bytes('abc'), 3);
+  assert.equal(utf8Bytes('é'), 2);
+  assert.equal(utf8Bytes('€'), 3);
+  assert.equal(jsonBytes({ s: 'é' }), Buffer.byteLength(JSON.stringify({ s: 'é' })));
+  assert.equal(jsonBytes(undefined), 0);
+  assert.equal(jsonBytes({ n: 1n }), Infinity);
+  // With a limit, the answer is only exact about which side of it the bytes fall on.
+  const wide = 'é'.repeat(9000); // 9000 characters, 18,000 bytes
+  const max = LIMITS.MAX_MESSAGE_BYTES - LIMITS.ENVELOPE_BYTES;
+  assert.ok(wide.length < max && jsonBytes(wide, max) > max);
+  assert.ok(jsonBytes('x'.repeat(100), max) <= max);
 });
 
 test('the kit has a version', () => {

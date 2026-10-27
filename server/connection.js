@@ -145,12 +145,15 @@ export class Connection {
   }
 
   /**
-   * A relay over the relay bucket is dropped. From the runner of a running host-run match it
-   * counts toward the match's drop limit (too many ends the match); anywhere else it is a flood strike.
+   * A relay over the relay bucket is dropped. From the runner of a running host-run match (playing
+   * or in its results period) it counts toward the match's drop limit (too many ends the match);
+   * anywhere else it is a flood strike.
    */
   #relayRefused() {
     const match = this.room?.match;
-    if (match?.relayDropped && this.room.phase === 'playing' && match.runnerId === this.player?.id) {
+    // In the results period the match is still running (and still relaying), so it counts the same.
+    const phase = this.room?.phase;
+    if (match?.relayDropped && (phase === 'playing' || phase === 'results') && match.runnerId === this.player?.id) {
       match.relayDropped();
       return;
     }
@@ -188,7 +191,9 @@ export class Connection {
     }
 
     if (!room || !player) return this.error('not_in_room');
-    if (!player.bot) room.lastActivity = Date.now();
+    // Only a person's own messages keep a room open. A runner relays every tick whether or not
+    // anyone is there, so relays never count.
+    if (!player.bot && msg.t !== C2S.RELAY) room.lastActivity = Date.now();
     const isHost = room.hostId === player.id;
     let err = null;
 

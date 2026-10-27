@@ -1,11 +1,17 @@
+// Running matches may go on past the budget, but only this far past it.
+export const HARD_LIMIT = 1.25;
+
 /**
  * Counts the bytes the server sends to players each day (UTC), for hosts with a bandwidth cap.
  * With a budget set, `overBudget` turns true once the day's total passes it, and new rooms
- * and matches are refused until the next UTC day.
+ * and matches are refused until the next UTC day. Matches already running go on until the
+ * day's total reaches HARD_LIMIT times the budget; then `onHardLimit` is called (once a day,
+ * outside the send that crossed it) to end them.
  */
 export class TrafficMeter {
-  constructor({ dailyMb = 0, log, now = () => Date.now() } = {}) {
+  constructor({ dailyMb = 0, log, now = () => Date.now(), onHardLimit = null } = {}) {
     this.budget = dailyMb > 0 ? dailyMb * 1024 * 1024 : 0;
+    this.onHardLimit = onHardLimit;
     this.log = log;
     this.now = now;
     this.day = this.#today();
@@ -36,6 +42,12 @@ export class TrafficMeter {
     }
     if (was < this.budget && this.bytes >= this.budget) {
       this.log?.warn('traffic: daily budget used up; new rooms and matches are refused until midnight UTC');
+    }
+    const hard = this.budget * HARD_LIMIT;
+    if (was < hard && this.bytes >= hard) {
+      this.log?.warn(`traffic: ${HARD_LIMIT * 100}% of the daily budget used; ending every running match`);
+      // Not from inside the send that crossed it: ending a match sends more.
+      if (this.onHardLimit) queueMicrotask(() => this.onHardLimit());
     }
   }
 

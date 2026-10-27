@@ -104,13 +104,18 @@ The server doesn't trust the host's frame with anything beyond its own room. Eve
 checked, and a bad one is skipped:
 
 - Only the host can relay, and only for the match it started. A late relay is refused.
-- A batch holds at most 512 items and 256 KB, and a runner has its own rate limit. A runner that keeps
-  going over it ends the match with "The game sent far too many messages, so friendslop hung up on it."
-  The relayed messages count toward the daily traffic budget like any other.
+- A batch holds at most 512 items and 256 KB, and a runner has its own rate limit. A match also has a
+  delivery budget of 2000 a second (bursts up to 4000): a message costs one for each player it
+  reaches, and a score or stat change costs one. A broadcast to a full room 60 times a second fits.
+  A runner that keeps going over either ends the match with "The game sent far too many messages, so
+  friendslop hung up on it." The relayed messages count toward the daily traffic budget like any other.
+- Sizes are counted in UTF-8 bytes. A message from a player's client holds a little under 16 KB of
+  JSON, and text in most non-Latin scripts takes two or three bytes a character.
 - A message to players (`send`, `broadcast`, `sendTeam`) reaches only players in the match, and its
   type is at most 64 characters.
 - Stat keys match `^[A-Za-z0-9_]{1,32}$`, a player has at most 32 of them, and a value is a finite
-  number or text of at most 64 characters.
+  number or text of at most 64 characters. Text is cleaned like a name (control characters and
+  direction marks are removed, spaces collapsed).
 - Scores and teams must name a real team and a finite number, a player must exist to be moved, and
   `announce` is cleaned, trimmed to the chat limit and rate limited.
 - `endMatch` carries a winner of at most 64 characters, and its text and results period are cleaned

@@ -6,7 +6,7 @@
 // for shape and size, and any text in it is shown as text, never as HTML.
 
 import { toast } from './dom.js';
-import { C2S, S2C, LIMITS } from '/shared/protocol.js';
+import { C2S, S2C, LIMITS, jsonBytes } from '/shared/protocol.js';
 import { COPY } from '/shared/copy.js';
 
 const ROLES = new Set(['inspect', 'player', 'host']);
@@ -16,6 +16,9 @@ const KEYS = new Set(['Tab', 'Enter', 'NumpadEnter', 'Escape']);
 const TYPE_MAX = 64; // the server's cap on a game message type
 const TEXT_MAX = 1000; // error and toast text from the frame
 const META_MAX = 64 * 1024;
+// A game message's data and a relay batch, in UTF-8 bytes, leaving room for the message around them.
+const SEND_MAX_BYTES = LIMITS.MAX_MESSAGE_BYTES - LIMITS.ENVELOPE_BYTES;
+const RELAY_MAX_BYTES = LIMITS.MAX_RELAY_BYTES - LIMITS.ENVELOPE_BYTES;
 const CLOCK_MS = 2000;
 const READY_WAIT_MS = 5000;
 // Relay messages held before the host's frame takes them.
@@ -205,7 +208,7 @@ export function mountGameFrame({ net, store, role, src, container, overlay = {},
     if (destroyed || inited) return;
     const wasHost = role === 'host';
     destroy();
-    const detail = 'the game frame never started';
+    const detail = COPY.frameNeverStarted;
     // The host's frame was to run the game for everyone: end the match, the way a crash does.
     if (wasHost) net.send(C2S.RELAY, { msgs: [{ k: 'ctx', op: 'endMatch', args: [{ text: COPY.gameCrashed(detail), error: true }, {}] }] });
     overlay.onError?.(COPY.gameWontLoad(detail));
@@ -258,13 +261,15 @@ export function mountGameFrame({ net, store, role, src, container, overlay = {},
         return;
       case 'send':
         if (role === 'inspect' || typeof msg.type !== 'string' || msg.type.length > TYPE_MAX) return;
-        if (jsonSize(msg.data) > LIMITS.MAX_MESSAGE_BYTES - 256) return;
+        // Bytes, as the server counts them: a message over its limit would close this player's socket.
+        if (jsonBytes(msg.data, SEND_MAX_BYTES) > SEND_MAX_BYTES) return;
         net.sendGame(msg.type, msg.data);
         return;
       case 'relay':
         // Only the host's frame runs the game; anything else claiming to is ignored.
         if (role !== 'host' || !Array.isArray(msg.msgs) || msg.msgs.length > LIMITS.MAX_RELAY_MSGS) return;
-        if (jsonSize(msg.msgs) > LIMITS.MAX_RELAY_BYTES - 256) return;
+        // The runner (client/frame/runner-core.js) checked the same array against the same limit.
+        if (jsonBytes(msg.msgs, RELAY_MAX_BYTES) > RELAY_MAX_BYTES) return;
         net.send(C2S.RELAY, { msgs: msg.msgs });
         return;
       case 'pickTeam':

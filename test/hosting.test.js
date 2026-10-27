@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { startServer, TestClient, sleep } from './helpers.js';
 import { TrafficMeter } from '../server/traffic.js';
+import { COPY } from '../shared/copy.js';
+import starter from '../templates/starter/server.js';
 
 function get(port, path, host) {
   return new Promise((resolve, reject) => {
@@ -99,4 +101,76 @@ test('the traffic meter starts again each UTC day', () => {
   assert.equal(meter.overBudget, false);
   assert.equal(meter.stats().sentMb, 0);
   assert.equal(new TrafficMeter().overBudget, false, 'no budget means no limit');
+});
+
+// ---- a game from a GitHub source (the host's browser runs it; the test plays its runner by hand) ----
+
+const SOURCE = 'gh:test/friendslop@' + '0'.repeat(40) + '/templates/starter';
+const STARTER_META = (() => {
+  const { create, ...rest } = JSON.parse(JSON.stringify(starter));
+  return { ...rest, hasBot: false };
+})();
+
+/** A remote room whose match is running, with the host loaded in it. */
+async function remoteMatch(srv) {
+  const host = new TestClient(srv.base);
+  await host.connect();
+  host.send('room:create', { name: 'Host', password: '', source: SOURCE, def: STARTER_META });
+  const w = await host.next((m) => m.t === 'welcome');
+  host.send('room:start');
+  await host.next((m) => m.t === 'match:start');
+  host.send('match:ready');
+  await host.waitFor((m) => m.t === 'relay:event' && m.ev === 'join');
+  return { host, roomId: w.room.id };
+}
+
+const relayOut = (c, i) => c.send('relay', { msgs: [{ k: 'out', to: 'all', type: 'tick', data: i }] });
+
+test('a host-run room with only relays still closes when its people go quiet', async () => {
+  const srv = await startServer({ ROOM_IDLE_MS: '400' });
+  const { host, roomId } = await remoteMatch(srv);
+  let i = 0;
+  const ticks = setInterval(() => relayOut(host, i++), 100);
+  try {
+    const left = await host.next((m) => m.t === 'left', 3000);
+    assert.equal(left.reason, 'idle');
+    assert.equal(srv.server.manager.rooms.has(roomId), false);
+    assert.ok(i >= 3, 'relays were flowing');
+  } finally {
+    clearInterval(ticks);
+    host.close();
+    await srv.close();
+  }
+});
+
+test('running matches go on past the daily budget, and end at 1.25 times it', async () => {
+  const srv = await startServer({ DAILY_TRAFFIC_MB: '1' });
+  const local = await hostRoom(srv);
+  const remote = await remoteMatch(srv);
+  try {
+    local.host.send('room:start');
+    await local.host.next((m) => m.t === 'match:start');
+    local.host.send('match:ready');
+    const meter = srv.server.traffic;
+    meter.bytes = meter.budget;
+    relayOut(remote.host, 1);
+    await remote.host.next((m) => m.t === 'game' && m.type === 'tick');
+    await sleep(100);
+    assert.equal(srv.server.manager.rooms.get(local.roomId).phase, 'playing', 'over the budget, a running match goes on');
+    assert.equal(srv.server.manager.rooms.get(remote.roomId).phase, 'playing');
+    meter.bytes = meter.budget * 1.25 - 10;
+    const localEnd = local.host.next((m) => m.t === 'match:end');
+    const remoteEnd = remote.host.next((m) => m.t === 'match:end');
+    relayOut(remote.host, 2);
+    for (const end of [await localEnd, await remoteEnd]) {
+      assert.equal(end.result.text, COPY.dataBudgetEnded);
+      assert.equal(end.result.error, true);
+    }
+    assert.equal(srv.server.manager.rooms.get(local.roomId).phase, 'lobby');
+    assert.equal(srv.server.manager.rooms.get(remote.roomId).phase, 'lobby');
+  } finally {
+    local.host.close();
+    remote.host.close();
+    await srv.close();
+  }
 });

@@ -23,8 +23,11 @@ services:
       # Render's proxy puts the player's address first in X-Forwarded-For.
       - key: TRUST_PROXY
         value: "1"
-      # No GAMES_DIR: this server runs no game code. Games come from GitHub links, run in the
-      # players' browsers, and the server only relays them (see "Games shared by link" in README.md).
+      # This server runs no game code. Games come from GitHub links, run in the players' browsers,
+      # and the server only relays them (see "Games shared by link" in README.md). GAMES_DIR points
+      # at a folder that must stay empty, so a game committed to games/ never runs here.
+      - key: GAMES_DIR
+        value: server/no-games
       # Public-server limits (see the config table in README.md).
       - key: MAX_ROOMS
         value: "20"

@@ -281,6 +281,20 @@ test('a game that sends too much in one tick ends cleanly', async () => {
   assert.equal(s.guest.messages.filter((m) => m.t === 'match:end').length, 1);
 });
 
+test('the runner measures a batch in UTF-8 bytes against the limit the page uses', { timeout: 15000 }, async () => {
+  // 120 K two-byte characters (240 KB) fit under MAX_RELAY_BYTES less the envelope margin; 130 K do not,
+  // though their 130 K UTF-16 units would.
+  const dir = await tempGame("let n = 0; return { tick() { n++; if (n === 1) ctx.broadcast('wide', '\u00e9'.repeat(120 * 1024)); if (n === 3) ctx.broadcast('wider', '\u00e9'.repeat(130 * 1024)); } };");
+  const s = await setup(dir);
+  await play(s);
+  const wide = await s.guest.nextGame('wide', 4000);
+  assert.equal(wide.length, 120 * 1024);
+  const end = await s.guest.waitFor((m) => m.t === 'match:end', 4000);
+  assert.equal(end.result.text, COPY.gameTooChatty);
+  assert.ok(!s.guest.messages.some((m) => m.t === 'game' && m.type === 'wider'));
+  assert.equal(s.host.ws.readyState, 1);
+});
+
 test('virtual bots move in a remote dots room', async () => {
   const s = await setup(DOTS, 0);
   s.host.send('room:bots', { add: 1, team: 'blue' });

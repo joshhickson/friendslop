@@ -3,6 +3,7 @@ import { hashPassword, verifyPassword, randomRoomId, FailureLimiter, WindowLimit
 import { normalizeRoomId, cleanName, LIMITS } from '../shared/protocol.js';
 import { parseRef, repoKey } from '../shared/gameref.js';
 import { defineRemoteGame } from './kit/defineGame.js';
+import { COPY } from '../shared/copy.js';
 
 /** Owns every room on the server and handles create / join. */
 export class RoomManager {
@@ -37,6 +38,17 @@ export class RoomManager {
         this.log.info(`room ${room.id} closed: idle`);
         room.close('idle');
       }
+    }
+  }
+
+  /**
+   * The day's traffic reached the hard limit (server/traffic.js): every running match ends, the
+   * ones the server runs and the ones a host's browser runs. A results period is cut short.
+   */
+  endMatchesOverBudget() {
+    for (const room of [...this.rooms.values()]) {
+      if (room.phase === 'playing') room.endMatch({ text: COPY.dataBudgetEnded, error: true }, { resultsSeconds: 0 });
+      else if (room.phase === 'results') room.returnToLobby();
     }
   }
 
