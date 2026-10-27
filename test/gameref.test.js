@@ -204,7 +204,7 @@ test('player-facing copy has no em or en dashes and its functions say what happe
     else {
       assert.equal(typeof v, 'function', key);
       if (key === 'badLink') all.push(...REASONS.map((r) => v(r)), v('something_else'));
-      else if (key === 'gameCrashed') all.push(v('boom at line 3'));
+      else if (key === 'gameCrashed' || key === 'gameWontLoad') all.push(v('boom at line 3'));
       else if (key === 'unreviewedBanner') all.push(v('josh', 'josh/tag'));
       else assert.fail(`unexpected function ${key}`);
     }
@@ -216,6 +216,7 @@ test('player-facing copy has no em or en dashes and its functions say what happe
   const reasons = REASONS.map((r) => COPY.badLink(r));
   assert.equal(new Set(reasons).size, reasons.length, 'each reason has its own sentence');
   assert.ok(COPY.gameCrashed('boom at line 3').includes('boom at line 3'));
+  assert.ok(COPY.gameWontLoad('boom at line 3').includes('boom at line 3'));
   assert.ok(COPY.unreviewedBanner('josh', 'josh/tag').includes('josh'));
   assert.ok(COPY.unreviewedBanner('josh', 'josh/tag').includes('josh/tag'));
 });

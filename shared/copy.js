@@ -22,6 +22,7 @@ export const COPY = Object.freeze({
   blocked: 'This game has been retired from friendslop.',
   gameCrashed: (msg) => `The game crashed: ${msg}. It took the match down with it, so you are back in the lobby. Tell its maker, who will want that message.`,
   gameTooChatty: 'The game sent far too many messages, so friendslop hung up on it. Ask its maker to send fewer, or to send them less often.',
+  gameWontLoad: (msg) => `The game wouldn't load: ${msg}. Leave the room and try again, or tell its maker, who will want that message.`,
   gameLeftFriendslop: 'The game tried to wander off to some other website, and friendslop caught it at the door. Ask its maker to keep it inside the page.',
   badLink: (reason) => BAD_LINK[reason] ?? "Something went wrong with that link and we're not sure what. Check it and try again.",
 

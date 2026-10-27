@@ -12,6 +12,7 @@ import { loadGames } from './games.js';
 import { BotManager, INTERNAL_BOT_KEY } from './bots/manager.js';
 import { createLogger } from './log.js';
 import { remoteSettings } from './config.js';
+import { renderFrame } from './frame.js';
 import { isHostAllowed, isOriginAllowed, clientIp } from './security.js';
 import { TrafficMeter } from './traffic.js';
 import { LIMITS } from '../shared/protocol.js';
@@ -204,6 +205,16 @@ export async function createGameServer(config, { log = createLogger(config.logLe
     if (pathname.includes('\0')) {
       res.writeHead(400);
       res.end();
+      return;
+    }
+    // The game frame's page is built per request (import map, nonce); the scripts it loads are
+    // ordinary files under the /frame/ mount.
+    if (pathname === '/frame/' || pathname === '/frame/index.html') {
+      const page = renderFrame(req, config, remote);
+      const body = Buffer.from(page.body);
+      res.writeHead(page.status, { ...page.headers, 'Content-Length': body.length });
+      if (req.method !== 'HEAD') traffic.add(body.length);
+      res.end(req.method === 'HEAD' ? undefined : body);
       return;
     }
     await serveStatic(req, res, pathname);
