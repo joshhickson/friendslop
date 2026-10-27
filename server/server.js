@@ -1,9 +1,9 @@
 // HTTP static file server + WebSocket endpoint (/ws).
 
 import http from 'node:http';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, stat, realpath } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { join, resolve, sep, extname, dirname } from 'node:path';
+import { join, resolve, relative, sep, extname, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { Connection } from './connection.js';
@@ -41,6 +41,27 @@ const MIME = {
 };
 
 /**
+ * What the dev CDN may serve, as paths relative to the repo root: the folders a game or the frame
+ * imports from, and package.json. Nothing else in the repo (.git, .env, node_modules, most of server/) is reachable.
+ * Compared case-insensitively, because NTFS and exFAT are.
+ */
+const DEV_CDN_FOLDERS = ['client/', 'shared/', 'games/', 'templates/', 'server/kit/'];
+
+function devCdnAllowed(relPath) {
+  if (relPath.includes('\\') || /[%:\u0000]/.test(relPath)) return false;
+  const segments = relPath.split('/');
+  if (segments.some((seg) => seg === '' || seg.startsWith('.') || /[. ]$/.test(seg))) return false;
+  const lower = segments.join('/').toLowerCase();
+  return lower === 'package.json' || DEV_CDN_FOLDERS.some((f) => lower.startsWith(f) && lower.length > f.length);
+}
+
+/** The same check against a path the filesystem resolved, so the filter and the disk agree. */
+async function devCdnVerify(file) {
+  const rel = relative(await realpath(ROOT), await realpath(file));
+  return devCdnAllowed(rel.split(sep).join('/'));
+}
+
+/**
  * Public URL prefixes and the folders they map to. Only these are ever served —
  * in particular games/<id>/server.js and the server/ folder are never exposed.
  */
@@ -50,15 +71,15 @@ function mounts({ gamesDir, devCdn }) {
     // /shared/copy.js from here, so these routes answer cross-origin requests (see CROSS_ORIGIN_PREFIXES).
     { prefix: '/frame/', dir: join(ROOT, 'client', 'frame') },
     // Stand-in for jsDelivr when DEV_CDN=1: /dev-cdn/gh/<user>/<repo>@<commit>/<path> serves this repo's <path>,
-    // whatever the user, repo and commit say. Hidden folders and node_modules are never served.
+    // whatever the user, repo and commit say. Only the folders in DEV_CDN_FOLDERS (and package.json) are served.
     ...(devCdn ? [{
       prefix: '/dev-cdn/gh/',
       dir: ROOT,
       rewrite: (rel) => {
         const m = /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}@[0-9a-f]{40}\/(.+)$/.exec(rel);
-        if (!m || m[1].split('/').some((seg) => seg.startsWith('.') || seg === 'node_modules')) return null;
-        return m[1];
+        return m && devCdnAllowed(m[1]) ? m[1] : null;
       },
+      verify: devCdnVerify,
     }] : []),
     { prefix: '/vendor/three/', dir: join(ROOT, 'node_modules', 'three', 'build') },
     { prefix: '/vendor/three-addons/', dir: join(ROOT, 'node_modules', 'three', 'examples', 'jsm') },
@@ -82,7 +103,7 @@ async function inlineScriptHashes() {
 
 let scriptHashes = [];
 
-function securityHeaders(req, config, pathname = '') {
+function securityHeaders(req, githubOrigin, pathname = '') {
   const host = req.headers.host;
   const crossOrigin = CROSS_ORIGIN_PREFIXES.some((p) => pathname.startsWith(p));
   return {
@@ -99,7 +120,7 @@ function securityHeaders(req, config, pathname = '') {
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "media-src 'self' data: blob:",
-      `connect-src 'self' ws://${host} wss://${host} ${new URL(config.githubApi).origin}`,
+      `connect-src 'self' ws://${host} wss://${host} ${githubOrigin}`,
       "object-src 'none'",
       "base-uri 'none'",
       "frame-ancestors 'none'",
@@ -119,6 +140,7 @@ export async function createGameServer(config, { log = createLogger(config.logLe
   const manager = new RoomManager({ config, log: log.child('rooms'), games, bots, traffic });
   const staticMounts = mounts(config);
   const remote = remoteSettings(config);
+  const githubOrigin = new URL(config.githubApi).origin;
 
   async function serveStatic(req, res, pathname) {
     if (pathname === '/' || pathname === '/index.html') pathname = '/client/index.html';
@@ -133,9 +155,10 @@ export async function createGameServer(config, { log = createLogger(config.logLe
       try {
         const st = await stat(file);
         if (!st.isFile()) break;
+        if (m.verify && !(await m.verify(file))) break;
         const body = await readFile(file);
         res.writeHead(200, {
-          ...securityHeaders(req, config, pathname),
+          ...securityHeaders(req, githubOrigin, pathname),
           'Content-Type': MIME[extname(file).toLowerCase()] ?? 'application/octet-stream',
           'Content-Length': body.length,
           // Vibecoding-friendly: always revalidate so edits show up on refresh.
@@ -148,7 +171,7 @@ export async function createGameServer(config, { log = createLogger(config.logLe
         break;
       }
     }
-    res.writeHead(404, { ...securityHeaders(req, config, pathname), 'Content-Type': 'text/plain; charset=utf-8' });
+    res.writeHead(404, { ...securityHeaders(req, githubOrigin, pathname), 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('Not found');
   }
 

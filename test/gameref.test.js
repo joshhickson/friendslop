@@ -80,9 +80,32 @@ test('dev CDN serves the repo with CORS only when enabled', async () => {
     assert.equal(res.status, 200);
     assert.equal(res.headers['access-control-allow-origin'], '*');
     assert.equal(res.headers['cross-origin-resource-policy'], 'cross-origin');
-    assert.equal((await get(on.port, `/dev-cdn/gh/x/y@${ZERO}/.git/config`)).status, 404, 'no dot folders');
-    assert.equal((await get(on.port, `/dev-cdn/gh/x/y@${ZERO}/node_modules/ws/package.json`)).status, 404, 'no node_modules');
-    assert.equal((await get(on.port, `/dev-cdn/gh/x/y@${ZERO}/%2e%2e/package.json`)).status, 404, 'no traversal');
+    const dev = (p) => get(on.port, `/dev-cdn/gh/x/y@${ZERO}/${p}`);
+    // The allowlist: a few folders and package.json.
+    assert.equal((await dev('package.json')).status, 200);
+    assert.equal((await dev('server/kit/index.js')).status, 200);
+    assert.equal((await dev('shared/protocol.js')).status, 200);
+    // Everything else is a 404, including the ways Windows can reach it.
+    const blocked = {
+      'dot folder': '.git/config',
+      'dot file that exists': '.gitignore',
+      'a .env request': '.env',
+      node_modules: 'node_modules/ws/package.json',
+      'node_modules, other case': 'Node_Modules/ws/package.json',
+      'node_modules behind %5C': 'node_modules%5Cws%5Cpackage.json',
+      'git HEAD behind %5C and ..': 'x%5C..%5C.git%5CHEAD',
+      'git config behind %5C and ..': 'x%5C..%5C.git%5Cconfig',
+      'server/ outside server/kit': 'server/rooms.js',
+      'server/ in other case': 'SERVER/rooms.js',
+      'the folder itself': 'server/kit/',
+      'double-encoded percent': '%252e%252e/package.json',
+      'traversal': '%2e%2e/package.json',
+      'traversal inside an allowed folder': 'shared/../server/rooms.js',
+      'a stream suffix': 'package.json::$DATA',
+      'a trailing dot': 'server.js.',
+      'docs': 'docs/superpowers/specs/2026-10-26-game-hosting-design.md',
+    };
+    for (const [what, p] of Object.entries(blocked)) assert.equal((await dev(p)).status, 404, what);
     assert.equal((await get(on.port, '/dev-cdn/gh/x/y@short/package.json')).status, 404, 'needs a full commit');
   } finally {
     await on.close();
