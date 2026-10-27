@@ -1,6 +1,7 @@
 import { parseArgs } from 'node:util';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadBlocklist } from './blocklist.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -79,8 +80,34 @@ export function loadConfig(argv = process.argv.slice(2), env = process.env) {
     // matches start until midnight UTC; running matches finish.
     dailyTrafficMb: int(env.DAILY_TRAFFIC_MB, 0),
 
+    // ---- Games that run from a GitHub link (the host's browser runs them) ----
+    // jsDelivr folder that serves a GitHub repo at one commit: <gameCdn><user>/<repo>@<commit>/...
+    gameCdn: env.GAME_CDN ?? 'https://cdn.jsdelivr.net/gh/',
+    // Where the frame loads three.js from (the same build the server vendors).
+    threeBase: env.THREE_BASE ?? 'https://cdn.jsdelivr.net/npm/three@0.186.1/',
+    // Where the host's browser turns a branch name into a commit.
+    githubApi: env.GITHUB_API ?? 'https://api.github.com',
+    // Where "Report it" sends people.
+    reportUrl: env.REPORT_URL ?? 'https://github.com/joshhickson/friendslop/issues/new',
+    // Serve this repo's own files at /dev-cdn/gh/... so a game can be tried before it is on GitHub.
+    // Only works when the server listens on this machine.
+    devCdn: env.DEV_CDN === '1' && isLoopbackHost(host),
+    // Repos (lowercase user/repo) that may not be played here.
+    blocklist: loadBlocklist(resolve(env.BLOCKLIST ?? join(ROOT, 'blocklist.json'))),
+
     logLevel: env.LOG_LEVEL ?? 'info',
   };
   config.isLoopbackOnly = isLoopbackHost(config.host);
   return config;
+}
+
+/** The settings a browser needs to load a game from GitHub, sent to every client in HELLO. */
+export function remoteSettings(config) {
+  return {
+    cdn: config.devCdn ? '/dev-cdn/gh/' : config.gameCdn,
+    three: config.devCdn ? '/vendor/three/' : config.threeBase,
+    githubApi: config.githubApi,
+    reportUrl: config.reportUrl,
+    dev: config.devCdn,
+  };
 }

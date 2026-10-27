@@ -7,7 +7,7 @@ import { TokenBucket } from './security.js';
 const OPEN = 1;
 
 export class Connection {
-  constructor(ws, { ip, manager, log, games, defaultGame, traffic = null }) {
+  constructor(ws, { ip, manager, log, games, defaultGame, traffic = null, remote = null }) {
     this.ws = ws;
     this.traffic = traffic;
     this.ip = ip;
@@ -30,6 +30,7 @@ export class Connection {
 
     this.send(S2C.HELLO, {
       serverTime: Date.now(),
+      remote,
       defaultGame: games.has(defaultGame) ? defaultGame : games.keys().next().value,
       games: [...games.values()].map((g) => ({ id: g.id, name: g.name, description: g.description, minPlayers: g.minPlayers, maxPlayers: g.maxPlayers, teams: g.teams })),
     });

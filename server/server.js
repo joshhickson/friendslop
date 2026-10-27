@@ -11,6 +11,7 @@ import { RoomManager } from './rooms.js';
 import { loadGames } from './games.js';
 import { BotManager, INTERNAL_BOT_KEY } from './bots/manager.js';
 import { createLogger } from './log.js';
+import { remoteSettings } from './config.js';
 import { isHostAllowed, isOriginAllowed, clientIp } from './security.js';
 import { TrafficMeter } from './traffic.js';
 import { LIMITS } from '../shared/protocol.js';
@@ -43,8 +44,22 @@ const MIME = {
  * Public URL prefixes and the folders they map to. Only these are ever served —
  * in particular games/<id>/server.js and the server/ folder are never exposed.
  */
-function mounts(gamesDir) {
+function mounts({ gamesDir, devCdn }) {
   return [
+    // The frame runs in a sandboxed iframe with an opaque origin and imports /shared/protocol.js and
+    // /shared/copy.js from here, so these routes answer cross-origin requests (see CROSS_ORIGIN_PREFIXES).
+    { prefix: '/frame/', dir: join(ROOT, 'client', 'frame') },
+    // Stand-in for jsDelivr when DEV_CDN=1: /dev-cdn/gh/<user>/<repo>@<commit>/<path> serves this repo's <path>,
+    // whatever the user, repo and commit say. Hidden folders and node_modules are never served.
+    ...(devCdn ? [{
+      prefix: '/dev-cdn/gh/',
+      dir: ROOT,
+      rewrite: (rel) => {
+        const m = /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}@[0-9a-f]{40}\/(.+)$/.exec(rel);
+        if (!m || m[1].split('/').some((seg) => seg.startsWith('.') || seg === 'node_modules')) return null;
+        return m[1];
+      },
+    }] : []),
     { prefix: '/vendor/three/', dir: join(ROOT, 'node_modules', 'three', 'build') },
     { prefix: '/vendor/three-addons/', dir: join(ROOT, 'node_modules', 'three', 'examples', 'jsm') },
     { prefix: '/shared/', dir: join(ROOT, 'shared') },
@@ -55,6 +70,9 @@ function mounts(gamesDir) {
   ];
 }
 
+/** Routes whose files the sandboxed frame (opaque origin) loads, so any origin may read them. */
+const CROSS_ORIGIN_PREFIXES = ['/frame/', '/dev-cdn/', '/vendor/', '/shared/'];
+
 /** CSP hashes for the inline <script> blocks in index.html (the import map), so no other inline script can run. */
 async function inlineScriptHashes() {
   const html = await readFile(join(ROOT, 'client', 'index.html'), 'utf8');
@@ -64,14 +82,16 @@ async function inlineScriptHashes() {
 
 let scriptHashes = [];
 
-function securityHeaders(req) {
+function securityHeaders(req, config, pathname = '') {
   const host = req.headers.host;
+  const crossOrigin = CROSS_ORIGIN_PREFIXES.some((p) => pathname.startsWith(p));
   return {
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'Referrer-Policy': 'no-referrer',
     'Cross-Origin-Opener-Policy': 'same-origin',
-    'Cross-Origin-Resource-Policy': 'same-origin',
+    'Cross-Origin-Resource-Policy': crossOrigin ? 'cross-origin' : 'same-origin',
+    ...(crossOrigin ? { 'Access-Control-Allow-Origin': '*' } : {}),
     'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
     'Content-Security-Policy': [
       "default-src 'self'",
@@ -79,7 +99,7 @@ function securityHeaders(req) {
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "media-src 'self' data: blob:",
-      `connect-src 'self' ws://${host} wss://${host}`,
+      `connect-src 'self' ws://${host} wss://${host} ${new URL(config.githubApi).origin}`,
       "object-src 'none'",
       "base-uri 'none'",
       "frame-ancestors 'none'",
@@ -97,15 +117,17 @@ export async function createGameServer(config, { log = createLogger(config.logLe
   const bots = new BotManager({ config, log: log.child('bots'), gamesDir: config.gamesDir });
   const traffic = new TrafficMeter({ dailyMb: config.dailyTrafficMb, log: log.child('traffic') });
   const manager = new RoomManager({ config, log: log.child('rooms'), games, bots, traffic });
-  const staticMounts = mounts(config.gamesDir);
+  const staticMounts = mounts(config);
+  const remote = remoteSettings(config);
 
   async function serveStatic(req, res, pathname) {
     if (pathname === '/' || pathname === '/index.html') pathname = '/client/index.html';
     if (pathname === '/favicon.ico') pathname = '/client/favicon.svg';
     for (const m of staticMounts) {
       if (!pathname.startsWith(m.prefix)) continue;
-      const rel = pathname.slice(m.prefix.length);
-      if (m.filter && !m.filter(rel)) break;
+      let rel = pathname.slice(m.prefix.length);
+      if (m.rewrite) rel = m.rewrite(rel);
+      if (rel === null || (m.filter && !m.filter(rel))) break;
       const file = resolve(m.dir, rel);
       if (!file.startsWith(m.dir + sep)) break; // path traversal
       try {
@@ -113,7 +135,7 @@ export async function createGameServer(config, { log = createLogger(config.logLe
         if (!st.isFile()) break;
         const body = await readFile(file);
         res.writeHead(200, {
-          ...securityHeaders(req),
+          ...securityHeaders(req, config, pathname),
           'Content-Type': MIME[extname(file).toLowerCase()] ?? 'application/octet-stream',
           'Content-Length': body.length,
           // Vibecoding-friendly: always revalidate so edits show up on refresh.
@@ -126,7 +148,7 @@ export async function createGameServer(config, { log = createLogger(config.logLe
         break;
       }
     }
-    res.writeHead(404, { ...securityHeaders(req), 'Content-Type': 'text/plain; charset=utf-8' });
+    res.writeHead(404, { ...securityHeaders(req, config, pathname), 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('Not found');
   }
 
@@ -209,7 +231,7 @@ export async function createGameServer(config, { log = createLogger(config.logLe
       ws.on('pong', () => { ws.isAlive = true; });
       // eslint-disable-next-line no-new
       // Bot traffic stays on this machine, so only player connections count toward the budget.
-      new Connection(ws, { ip, manager, log: log.child('conn'), games, defaultGame: config.defaultGame, traffic: internalBot ? null : traffic });
+      new Connection(ws, { ip, manager, log: log.child('conn'), games, defaultGame: config.defaultGame, traffic: internalBot ? null : traffic, remote });
     });
   });
 

@@ -2,6 +2,9 @@
 //   import { defineClientGame, Input, sfx, History, v3 } from '/client/kit/index.js';
 // three.js helpers live separately in '/client/kit/three.js' so 2D games don't load three.
 
+// Bump when the kit's API changes in a way an older game cannot follow; the runner compares it to a game's own.
+export const KIT_VERSION = 1;
+
 export { Input } from './input.js';
 export { sfx } from './sound.js';
 export { h, replace, toast } from '../js/dom.js';

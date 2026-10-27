@@ -5,6 +5,8 @@
 // { t: 'game', type: '<your type>', data: <anything JSON> } so games never collide
 // with framework messages.
 
+import { COPY } from './copy.js';
+
 export const C2S = Object.freeze({
   CREATE: 'room:create',     // { name, game, password }
   JOIN: 'room:join',         // { roomId, password, name, bot? } or { roomId, token, resume: true } or { roomId, botTicket }
@@ -78,7 +80,7 @@ export const ERRORS = Object.freeze({
   locked_out: 'Too many wrong passwords. Wait a minute and try again.',
   unknown_game: 'Unknown game.',
   too_many_rooms: 'The server has too many rooms right now.',
-  traffic_budget: 'The server has used its data for today. New games can start again after midnight UTC.',
+  traffic_budget: COPY.dataBudget,
   already_in_room: 'You are already in a room.',
   not_in_room: 'You are not in a room.',
   bad_phase: 'You cannot do that right now.',
@@ -88,4 +90,8 @@ export const ERRORS = Object.freeze({
   bad_ticket: 'That bot ticket is invalid or expired.',
   team_locked: 'The host has turned off team switching for this match.',
   session_expired: 'Your previous session has expired.',
+  game_blocked: COPY.blocked,
+  bad_source: COPY.badSource,
+  not_runner: COPY.notRunner,
+  relay_too_big: COPY.relayTooBig,
 });

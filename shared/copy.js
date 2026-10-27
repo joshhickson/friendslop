@@ -1,0 +1,32 @@
+// Every sentence a player reads that friendslop itself writes (not a game's own text).
+// Rewrite the jokes here. Each message must keep saying what happened and what to do.
+// House rule: hyphens only, never an em or en dash, and no sentence that depends on a dash.
+
+const BAD_LINK = Object.freeze({
+  not_github: "That doesn't look like a GitHub link, and GitHub is the only place friendslop knows how to shop. Paste the address of a game folder on github.com.",
+  no_game_path: "That link stops at the front door. Open the game's folder inside games/ or templates/ on GitHub, then paste that address.",
+  not_found: "GitHub has never heard of that one. Check the spelling, make sure the repo is public, and paste the link again.",
+  rate_limited: 'GitHub is sick of our questions and has told us to wait outside. Give it a few minutes and try again.',
+  network: "We couldn't reach GitHub. Either your internet or GitHub is having a moment. Check your connection and try again.",
+  timeout: 'GitHub took so long to answer that we gave up and ate lunch. Try again in a moment.',
+});
+
+export const COPY = Object.freeze({
+  unreviewedBanner: (maker, repo) => `Nobody at friendslop has played this yet. It could be a masterpiece. It could be three cubes and a dream. Made by ${maker} (${repo}). Report it`,
+  firstLook: 'Heads up: nobody has checked this game. Like any website, it can see your IP address. It probably just wants to show you some cubes. Play anyway?',
+  hostCanCheat: "The host's computer runs the game, so the host could change the score. Choose your friends carefully.",
+  hostLeft: 'The host left and took the whole game with them. Bold move. Back to the lobby.',
+  dataBudget: "friendslop has used up today's internet. New games can start after midnight UTC. Matches already running can finish.",
+  idleClosed: 'Everyone went quiet, so we closed the room. No hard feelings.',
+  forkTooOld: 'This game was built with an older friendslop, and they no longer speak the same language. Ask its maker to update their fork.',
+  blocked: 'This game has been retired from friendslop.',
+  gameCrashed: (msg) => `The game crashed: ${msg}. It took the match down with it, so you are back in the lobby. Tell its maker, who will want that message.`,
+  gameTooChatty: 'The game sent far too many messages, so friendslop hung up on it. Ask its maker to send fewer, or to send them less often.',
+  gameLeftFriendslop: 'The game tried to wander off to some other website, and friendslop caught it at the door. Ask its maker to keep it inside the page.',
+  badLink: (reason) => BAD_LINK[reason] ?? "Something went wrong with that link and we're not sure what. Check it and try again.",
+
+  // Server error texts that have no spec line of their own.
+  badSource: "That game's address didn't make sense to friendslop. Paste the link to the game folder again.",
+  notRunner: 'Only the player running the game can do that.',
+  relayTooBig: 'The game tried to send one message so big that friendslop refused to carry it. Ask its maker to send smaller ones.',
+});
