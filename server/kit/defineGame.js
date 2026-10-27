@@ -1,7 +1,10 @@
 // defineGame() validates a game definition and fills in defaults.
 // See docs/making-a-game.md for the full contract.
 
-const ID_RE = /^[a-z][a-z0-9-]{0,31}$/;
+import { cleanText } from '../../shared/protocol.js';
+import { parseRef } from '../../shared/gameref.js';
+
+const ID_RE =/^[a-z][a-z0-9-]{0,31}$/;
 
 function fail(id, msg) {
   throw new Error(`Game "${id ?? '?'}": ${msg}`);
@@ -103,4 +106,140 @@ export function defineGame(def) {
     autoFill,
     create: def.create,
   });
+}
+
+// ---- games that live in a GitHub repo ---------------------------------------------------------
+// The server never loads such a game's code. The host's browser loads it, calls describeGame(),
+// and sends the result here. Everything in it is untrusted JSON: rebuild it, don't trust it.
+
+const REMOTE_MAX = Object.freeze({ name: 40, description: 200, teams: 8, settings: 32, scoreboard: 8, controls: 16, controlKey: 24, controlText: 40, options: 32, players: 64 });
+const SETTING_KEY_RE = /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/;
+const COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
+
+function remoteFail(msg) {
+  throw new Error(msg);
+}
+
+const isPlain = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+
+function remoteText(v, what, max) {
+  if (typeof v !== 'string') remoteFail(`${what} must be text`);
+  return cleanText(v, max);
+}
+
+function remoteList(v, what, max) {
+  if (v === undefined || v === null) return [];
+  if (!Array.isArray(v)) remoteFail(`${what} must be a list`);
+  if (v.length > max) remoteFail(`at most ${max} ${what} are allowed (got ${v.length})`);
+  return v;
+}
+
+function remoteNumber(v, what, { min = -Infinity, max = Infinity, fallback } = {}) {
+  if (v === undefined || v === null) return fallback;
+  if (typeof v !== 'number' || !Number.isFinite(v)) remoteFail(`${what} must be a number`);
+  return Math.min(max, Math.max(min, v));
+}
+
+/** One setting in its normalized (array) form, as the [key, object] pair normalizeSetting reads. */
+function remoteSetting(s, i) {
+  if (!isPlain(s)) remoteFail(`setting #${i} must be an object`);
+  if (typeof s.key !== 'string' || !SETTING_KEY_RE.test(s.key)) remoteFail(`setting #${i} needs a key of letters, digits, dashes or underscores`);
+  const key = s.key;
+  const what = `setting "${key}"`;
+  if (s.type !== 'number' && s.type !== 'boolean' && s.type !== 'select') remoteFail(`${what} has an unknown type`);
+  const out = { type: s.type, default: s.default };
+  if (s.label !== undefined && s.label !== null) out.label = remoteText(s.label, `${what} label`, REMOTE_MAX.name) || key;
+  if (s.unit !== undefined && s.unit !== null) out.unit = remoteText(s.unit, `${what} unit`, 12);
+  if (s.type === 'number') {
+    if (typeof s.default !== 'number' || !Number.isFinite(s.default)) remoteFail(`number ${what} needs a numeric default`);
+    // null means unbounded (JSON cannot carry Infinity).
+    for (const edge of ['min', 'max', 'step']) {
+      const v = s[edge];
+      if (v === undefined || v === null) continue;
+      if (typeof v !== 'number' || !Number.isFinite(v)) remoteFail(`${what} ${edge} must be a number or null`);
+      out[edge] = v;
+    }
+    if (out.step !== undefined && !(out.step > 0)) remoteFail(`${what} step must be above zero`);
+    if ((out.min ?? -Infinity) > (out.max ?? Infinity)) remoteFail(`${what} has a min above its max`);
+  } else if (s.type === 'select') {
+    const options = remoteList(s.options, `options of ${what}`, REMOTE_MAX.options);
+    out.options = options.map((o, j) => {
+      const raw = isPlain(o) ? o : { value: o };
+      if (!['string', 'number', 'boolean'].includes(typeof raw.value)) remoteFail(`${what} option #${j} needs a text, number or boolean value`);
+      const label = raw.label === undefined || raw.label === null ? String(raw.value) : remoteText(raw.label, `${what} option label`, REMOTE_MAX.name);
+      return { value: raw.value, label };
+    });
+  }
+  return [key, out];
+}
+
+/**
+ * Rebuilds a game definition that arrived as JSON (what describeGame() makes in the host's
+ * browser) through the same checks as defineGame. `source` is the game's ref string.
+ * Returns the same frozen shape as defineGame, plus `source` and `hasBot`, with create: null.
+ * Throws an Error with a readable message on anything it does not accept.
+ */
+export function defineRemoteGame(meta, source) {
+  if (!parseRef(source)) remoteFail('the game source is not a valid gh: reference');
+  if (!isPlain(meta)) remoteFail('the game definition must be an object');
+  if (typeof meta.id !== 'string' || !ID_RE.test(meta.id)) remoteFail('id must be lowercase letters, digits or dashes (e.g. "tag")');
+  const id = meta.id;
+
+  const teams = remoteList(meta.teams, 'teams', REMOTE_MAX.teams).map((t, i) => {
+    if (!isPlain(t) || typeof t.id !== 'string' || !ID_RE.test(t.id)) remoteFail(`team #${i} needs a lowercase id`);
+    if (t.color !== undefined && t.color !== null && (typeof t.color !== 'string' || !COLOR_RE.test(t.color))) remoteFail(`team "${t.id}" needs a color like #3e8ef7`);
+    const name = t.name === undefined || t.name === null ? t.id : remoteText(t.name, `team "${t.id}" name`, REMOTE_MAX.name) || t.id;
+    return { id: t.id, name, ...(t.color ? { color: t.color } : {}) };
+  });
+
+  const settingEntries = remoteList(meta.settings, 'settings', REMOTE_MAX.settings).map(remoteSetting);
+  if (new Set(settingEntries.map(([k]) => k)).size !== settingEntries.length) remoteFail('setting keys must be unique');
+  const settings = Object.fromEntries(settingEntries);
+
+  const scoreboard = remoteList(meta.scoreboard, 'scoreboard columns', REMOTE_MAX.scoreboard).map((c, i) => {
+    if (!isPlain(c) || typeof c.key !== 'string' || !c.key) remoteFail(`scoreboard column #${i} needs a key`);
+    return { key: remoteText(c.key, 'scoreboard key', 32), label: c.label === undefined || c.label === null ? c.key : remoteText(c.label, 'scoreboard label', 24) };
+  });
+
+  const controls = remoteList(meta.controls, 'controls', REMOTE_MAX.controls).map((pair, i) => {
+    if (!Array.isArray(pair) || pair.length !== 2 || typeof pair[0] !== 'string' || typeof pair[1] !== 'string') {
+      remoteFail(`controls entry #${i} must be a [key, what] pair of text`);
+    }
+    const key = cleanText(pair[0], 1000);
+    const what = cleanText(pair[1], 1000);
+    if (key.length > REMOTE_MAX.controlKey) remoteFail(`controls key "${key.slice(0, 12)}..." is longer than ${REMOTE_MAX.controlKey} characters`);
+    if (what.length > REMOTE_MAX.controlText) remoteFail(`controls text for "${key}" is longer than ${REMOTE_MAX.controlText} characters`);
+    return [key, what];
+  });
+
+  let autoFill;
+  if (meta.autoFill !== undefined && meta.autoFill !== null) {
+    if (!isPlain(meta.autoFill)) remoteFail('autoFill must be an object');
+    autoFill = { perTeam: remoteNumber(meta.autoFill.perTeam, 'autoFill.perTeam', { min: 0, max: REMOTE_MAX.players }) };
+    for (const k of ['setting', 'difficultySetting']) {
+      const v = meta.autoFill[k];
+      if (v === undefined || v === null) continue;
+      if (typeof v !== 'string') remoteFail(`autoFill.${k} must be text`);
+      autoFill[k] = v;
+    }
+  }
+
+  const def = defineGame({
+    id,
+    name: (typeof meta.name === 'string' ? cleanText(meta.name, REMOTE_MAX.name) : '') || id,
+    description: typeof meta.description === 'string' ? cleanText(meta.description, REMOTE_MAX.description) : '',
+    minPlayers: Math.floor(remoteNumber(meta.minPlayers, 'minPlayers', { min: 1, max: REMOTE_MAX.players, fallback: 1 })),
+    maxPlayers: Math.floor(remoteNumber(meta.maxPlayers, 'maxPlayers', { min: 1, max: REMOTE_MAX.players, fallback: 16 })),
+    tickRate: remoteNumber(meta.tickRate, 'tickRate', { fallback: 20 }),
+    resultsSeconds: remoteNumber(meta.resultsSeconds, 'resultsSeconds', { fallback: 0 }),
+    joinInProgress: typeof meta.joinInProgress === 'boolean' ? meta.joinInProgress : true,
+    teamChangeInProgress: typeof meta.teamChangeInProgress === 'boolean' ? meta.teamChangeInProgress : true,
+    teams,
+    settings,
+    scoreboard,
+    controls,
+    autoFill,
+    create() {},
+  });
+  return Object.freeze({ ...def, create: null, source, hasBot: meta.hasBot === true });
 }

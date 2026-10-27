@@ -79,7 +79,7 @@ export function lobbyScreen(net) {
       h('div.grow'),
       h('button.btn.danger', { onclick: () => net.send(C2S.LEAVE) }, 'Leave'));
 
-    const gameRow = isHost && games.length > 1
+    const gameRow = isHost && games.length > 1 && !room.game.source
       ? h('select', { onchange: (e) => net.send(C2S.CONFIG, { game: e.target.value }) },
         games.map((g) => h('option', { value: g.id, selected: g.id === room.game.id }, g.name)))
       : h('b', room.game.name);

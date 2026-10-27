@@ -1,6 +1,8 @@
 import { Room } from './room.js';
 import { hashPassword, verifyPassword, randomRoomId, FailureLimiter, WindowLimiter } from './security.js';
 import { normalizeRoomId, cleanName, LIMITS } from '../shared/protocol.js';
+import { parseRef, repoKey } from '../shared/gameref.js';
+import { defineRemoteGame } from './kit/defineGame.js';
 
 /** Owns every room on the server and handles create / join. */
 export class RoomManager {
@@ -44,8 +46,22 @@ export class RoomManager {
     if (this.traffic?.overBudget) return { error: 'traffic_budget' };
     const name = cleanName(msg.name);
     if (!name) return { error: 'bad_request', message: 'Pick a name first.' };
-    const def = this.games.get(msg.game) ?? this.games.get(this.config.defaultGame) ?? this.games.values().next().value;
-    if (!def) return { error: 'unknown_game' };
+    // A game from a GitHub source: the host's browser described it, the server never runs it.
+    // The blocklist is checked before the (untrusted) description is read.
+    let def;
+    if (msg.source !== undefined) {
+      const ref = parseRef(msg.source);
+      if (!ref) return { error: 'bad_source' };
+      if (this.config.blocklist?.has(repoKey(ref))) return { error: 'game_blocked' };
+      try {
+        def = defineRemoteGame(msg.def, msg.source);
+      } catch (err) {
+        return { error: 'bad_source', message: String(err.message).slice(0, 300) };
+      }
+    } else {
+      def = this.games.get(msg.game) ?? this.games.get(this.config.defaultGame) ?? this.games.values().next().value;
+      if (!def) return { error: 'unknown_game' };
+    }
     const pw = typeof msg.password === 'string' ? msg.password.slice(0, LIMITS.PASSWORD_MAX) : '';
     const password = pw ? await hashPassword(pw) : null;
     if (conn.closed || conn.room) return { error: 'already_in_room' };
@@ -54,7 +70,7 @@ export class RoomManager {
     do id = randomRoomId(); while (this.rooms.has(id));
     const room = new Room({ id, password, def, owner: this });
     this.rooms.set(id, room);
-    this.log.info(`room ${id} created (${def.id}${password ? ', password' : ''}) by ${conn.ip}`);
+    this.log.info(`room ${id} created (${def.source ?? def.id}${password ? ', password' : ''}) by ${conn.ip}`);
     room.addPlayer(name, conn);
     return { room };
   }

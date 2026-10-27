@@ -8,7 +8,7 @@
 import { COPY } from './copy.js';
 
 export const C2S = Object.freeze({
-  CREATE: 'room:create',     // { name, game, password }
+  CREATE: 'room:create',     // { name, game, password } or, for a GitHub game, { name, password, source, def }
   JOIN: 'room:join',         // { roomId, password, name, bot? } or { roomId, token, resume: true } or { roomId, botTicket }
   LEAVE: 'room:leave',       // {}
   CONFIG: 'room:config',     // host only, lobby only: { game?, settings?, options?: { teamSwitch } }

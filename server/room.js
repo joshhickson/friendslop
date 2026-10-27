@@ -95,10 +95,15 @@ export class Room {
     return this.maxPlayers + SPECTATOR_SEATS;
   }
 
+  /** Does the server hold a bot brain for this room's game? Games from a GitHub source never run here. */
+  #hasBotBrain() {
+    return !this.def.source && Boolean(this.owner.bots?.hasBrain(this.def.id));
+  }
+
   /** Will bots top the teams up when the match starts? (game has autoFill, and it's switched on) */
   get willAutoFill() {
     const fill = this.def.autoFill;
-    return Boolean(fill && (!fill.setting || this.settings[fill.setting]) && this.owner.bots?.hasBrain(this.def.id));
+    return Boolean(fill && (!fill.setting || this.settings[fill.setting]) && this.#hasBotBrain());
   }
 
   /** Players currently taking a playing slot (spectators don't). */
@@ -161,7 +166,7 @@ export class Room {
   /** Host action: add `count` bots (each one is a separate WebSocket client). Returns an error code or null. */
   addBots({ count = 1, team = 'auto', difficulty = 'normal' } = {}) {
     const bots = this.owner.bots;
-    if (!bots?.hasBrain(this.def.id)) return 'no_bots';
+    if (!this.#hasBotBrain()) return 'no_bots';
     if (team !== 'auto' && !this.def.teams?.some((t) => t.id === team)) return 'bad_team';
     const n = Math.max(0, Math.min(Math.floor(Number(count) || 0), this.maxPlayers - this.playingCount - this.#pendingBots()));
     if (n === 0) return 'room_full';
@@ -181,7 +186,7 @@ export class Room {
     if (!fill || !this.match || this.phase !== 'playing' || this.balancing) return;
     if (fill.setting && !this.settings[fill.setting]) return;
     const bots = this.owner.bots;
-    if (!bots?.hasBrain(this.def.id)) return;
+    if (!this.#hasBotBrain()) return;
     const difficulty = fill.difficultySetting ? this.settings[fill.difficultySetting] : 'normal';
     const pending = bots.pending(this);
     for (const t of this.def.teams) {
@@ -405,6 +410,7 @@ export class Room {
 
   configure(input) {
     if (this.phase !== 'lobby') return 'bad_phase';
+    if (input.game && this.def.source) return 'bad_request'; // a game from a GitHub source cannot be swapped
     if (input.game && input.game !== this.def.id) {
       const def = this.owner.games.get(input.game);
       if (!def) return 'unknown_game';
@@ -568,6 +574,7 @@ export class Room {
       maxSeats: this.maxSeats,
       game: {
         id: def.id,
+        source: def.source ?? null,
         name: def.name,
         description: def.description,
         minPlayers: def.minPlayers,
@@ -581,7 +588,7 @@ export class Room {
       settings: this.settings,
       options: this.options,
       teamScores: this.teamScores,
-      botsSupported: Boolean(this.owner.bots?.hasBrain(def.id)),
+      botsSupported: def.source ? def.hasBot : Boolean(this.owner.bots?.hasBrain(def.id)),
       // Bots will fill the teams to this many each at match start (null: no auto-fill).
       autoFill: this.willAutoFill ? def.autoFill.perTeam : null,
       players: [...this.players.values()].map((p) => ({
