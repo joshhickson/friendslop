@@ -37,6 +37,12 @@ export const COPY = Object.freeze({
   hostButton: 'Host this game',
   hostChecking: 'Looking at the game...',
   hostStarter: 'Try the starter game',
+  hostLinkLabel: 'Link to the game folder',
+  passwordLabel: 'Password (optional)',
+  noPasswordPlaceholder: 'Leave empty for no password',
+  hostLoadFailed: "That game wouldn't load, so no room was made. Check that the link points at a game folder in a friendslop fork, then try again.",
+  inspectTitle: 'Checking the game folder',
+  firstLookNotNow: 'Not this one',
 
   // Server error texts that have no spec line of their own.
   badSource: "That game's address didn't make sense to friendslop. Paste the link to the game folder again.",

@@ -17,7 +17,7 @@ export function homeScreen(net, { prefillCode = '', preferGame = '', prefillHost
   const name = h('input', { type: 'text', maxLength: LIMITS.NAME_MAX, placeholder: 'Your name', value: savedName.get(), autocomplete: 'off' });
   const code = h('input.code', { type: 'text', maxLength: LIMITS.ROOM_ID_LEN, placeholder: 'ABC123', value: prefillCode, autocomplete: 'off' });
   const joinPw = h('input', { type: 'password', maxLength: LIMITS.PASSWORD_MAX, placeholder: 'Room password', autocomplete: 'off' });
-  const createPw = h('input', { type: 'password', maxLength: LIMITS.PASSWORD_MAX, placeholder: 'Leave empty for no password', autocomplete: 'new-password' });
+  const createPw = h('input', { type: 'password', maxLength: LIMITS.PASSWORD_MAX, placeholder: COPY.noPasswordPlaceholder, autocomplete: 'new-password' });
   const games = store.hello?.games ?? [];
   const initialGame = games.some((g) => g.id === preferGame) ? preferGame : store.hello?.defaultGame;
   const game = h('select', games.map((g) => h('option', { value: g.id, selected: g.id === initialGame }, g.name)));
@@ -47,7 +47,7 @@ export function homeScreen(net, { prefillCode = '', preferGame = '', prefillHost
 
   const remote = store.hello?.remote ?? {};
   const hostLink = h('input', { type: 'text', maxLength: 300, placeholder: COPY.hostPlaceholder, value: prefillHost, autocomplete: 'off', spellcheck: false });
-  const hostPw = h('input', { type: 'password', maxLength: LIMITS.PASSWORD_MAX, placeholder: 'Leave empty for no password', autocomplete: 'new-password' });
+  const hostPw = h('input', { type: 'password', maxLength: LIMITS.PASSWORD_MAX, placeholder: COPY.noPasswordPlaceholder, autocomplete: 'new-password' });
   const hostError = h('p.form-error', { role: 'alert' });
   const hostButton = h('button.btn.primary', { type: 'submit' }, COPY.hostButton);
   const starterButton = remote.dev ? h('button.btn', { type: 'button', onclick: () => hostFrom(async () => ({ src: STARTER })) }, COPY.hostStarter) : null;
@@ -93,7 +93,7 @@ export function homeScreen(net, { prefillCode = '', preferGame = '', prefillHost
       if (gone) return;
       if (!found.src) return fail(found.text);
       // The game is not run, even to look at it, until this browser has said yes to its repo.
-      const yes = await confirmFirstLook(repoKey(found.src), { signal: abort.signal });
+      const yes = await confirmFirstLook(repoKey(found.src), { signal: abort.signal, noLabel: COPY.firstLookNotNow });
       if (gone) return;
       if (!yes) return setBusy(false);
       const seen = await inspectGame(found.src, { container: inspectBox, net, store, signal: abort.signal });
@@ -119,8 +119,8 @@ export function homeScreen(net, { prefillCode = '', preferGame = '', prefillHost
     return h('form.stack.host-form', { onsubmit: (e) => { e.preventDefault(); hostFrom(findLink); } },
       h('h2', COPY.hostTitle),
       h('p.muted.small', COPY.hostHint),
-      h('label.field', 'Game link', hostLink),
-      h('label.field', 'Password (optional)', hostPw),
+      h('label.field', COPY.hostLinkLabel, hostLink),
+      h('label.field', COPY.passwordLabel, hostPw),
       hostError,
       h('div.row.wrap', hostButton, starterButton));
   }
@@ -147,7 +147,7 @@ export function homeScreen(net, { prefillCode = '', preferGame = '', prefillHost
           ? h('p.subtitle', COPY.noGamesYet)
           : h('form.stack', { onsubmit: create },
             h('label.field', 'Game', game),
-            h('label.field', 'Password (optional)', createPw),
+            h('label.field', COPY.passwordLabel, createPw),
             h('button.btn.primary.big', { type: 'submit' }, 'Create room')),
         hostForm(),
       ]

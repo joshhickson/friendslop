@@ -63,18 +63,29 @@ export async function inspectGame(src, { container, net, store, signal, timeoutM
     const onAbort = () => finish({ error: COPY.badLink('timeout') });
     const timer = setTimeout(() => finish({ error: COPY.badLink('timeout') }), timeoutMs);
     signal?.addEventListener('abort', onAbort);
-    frame = mountGameFrame({
-      net,
-      store,
-      role: 'inspect',
-      src,
-      container,
-      title: 'Game check',
-      overlay: {
-        onMeta: (meta, kitVersion) => finish({ meta, kitVersion }),
-        onError: (text) => finish({ error: text }),
-      },
-    });
+    try {
+      frame = mountGameFrame({
+        net,
+        store,
+        role: 'inspect',
+        src,
+        container,
+        title: COPY.inspectTitle,
+        overlay: {
+          onMeta: (meta, kitVersion) => finish({ meta, kitVersion }),
+          onError: (text) => {
+            // The frame's own words can carry raw module addresses: they go to the console for the
+            // maker, and the form shows a plain sentence. A fork that is too old keeps its own advice.
+            console.warn('game check failed:', text);
+            finish({ error: text === COPY.forkTooOld ? text : COPY.hostLoadFailed });
+          },
+        },
+      });
+    } catch (err) {
+      // finish() clears the timer and the abort listener, so nothing is left running.
+      console.error('could not start the game check', err);
+      return finish({ error: COPY.hostLoadFailed });
+    }
     // The frame may have failed while it was being mounted.
     if (done) frame.destroy();
   });

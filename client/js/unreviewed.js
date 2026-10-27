@@ -30,12 +30,12 @@ function remember(key) {
  * Shows COPY.firstLook once per repo key (repoKey(ref), lowercase user/repo). Resolves true at
  * once if this browser already said yes to that repo, and remembers a new yes. Resolves false on
  * a no, or when `signal` aborts (the screen that asked went away). The caller decides what a no
- * means.
+ * means. `noLabel` is the "no" button's text (COPY.leaveTheRoom on the match screen).
  * @param {string} repo
- * @param {{ signal?: AbortSignal }} [opts]
+ * @param {{ signal?: AbortSignal, noLabel?: string }} [opts]
  * @returns {Promise<boolean>}
  */
-export function confirmFirstLook(repo, { signal } = {}) {
+export function confirmFirstLook(repo, { signal, noLabel = COPY.leaveTheRoom } = {}) {
   if (accepted(repo)) return Promise.resolve(true);
   if (signal?.aborted) return Promise.resolve(false);
   return new Promise((resolve) => {
@@ -50,7 +50,7 @@ export function confirmFirstLook(repo, { signal } = {}) {
     const play = h('button.btn.primary', { onclick: () => done(true) }, COPY.firstLookPlay);
     box = h('div.first-look', h('div.panel.modal.stack',
       h('p', COPY.firstLook),
-      h('div.row.wrap', play, h('div.grow'), h('button.btn', { onclick: () => done(false) }, COPY.leaveTheRoom))));
+      h('div.row.wrap', play, h('div.grow'), h('button.btn', { onclick: () => done(false) }, noLabel))));
     signal?.addEventListener('abort', onAbort);
     document.body.append(box);
     play.focus();
