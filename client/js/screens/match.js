@@ -340,11 +340,15 @@ export function matchScreen(net, app) {
   };
 
   // ---------- load + mount the game ----------
+  let mountedOnce = false;
   function mounted(teamPicker) {
-    if (destroyed || ready) return;
+    if (destroyed || mountedOnce) return;
+    mountedOnce = true;
     loading.remove();
     renderScorebar();
     renderChat();
+    // A game that opened the team picker while it mounted may have sent READY already.
+    if (ready) return;
     // Team games: let the player pick a team on map load before spawning in.
     // Spectators who chose that in the lobby go straight in to watch.
     if (store.room.game.teams && teamPicker && !store.myPlayer?.spectating) openModal('teams');
@@ -364,7 +368,6 @@ export function matchScreen(net, app) {
     gated = false;
     const fail = (text) => {
       if (destroyed) return;
-      loading.classList.remove('stalled');
       if (!loading.isConnected) el.querySelector('.match-stage').append(loading);
       replace(loading, h('div.panel.stack', h('b', text), h('button.btn', { onclick: () => net.send(C2S.LEAVE) }, COPY.leaveTheRoom)));
     };
@@ -392,8 +395,6 @@ export function matchScreen(net, app) {
         },
         onMounted: ({ teamPicker }) => mounted(teamPicker),
         onError: fail,
-        // The frame refused the game and shows why itself: get out of its way.
-        onStalled: () => loading.classList.add('stalled'),
       },
     });
   }

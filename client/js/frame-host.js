@@ -18,7 +18,13 @@ const TEXT_MAX = 1000; // error and toast text from the frame
 const META_MAX = 64 * 1024;
 const CLOCK_MS = 2000;
 const READY_WAIT_MS = 5000;
-const BUFFER_MAX = 20_000; // relay messages held before the host's frame takes them
+// Relay messages held before the host's frame takes them.
+const RELAY_HELD_MAX = 40_000;
+const RELAY_HELD_BYTES = 8 * 1024 * 1024;
+// Event messages held for a frame that has not had its `init` yet (room and clock keep only the
+// latest). Past either cap the frame is taken as dead.
+const QUEUE_MAX = 2000;
+const QUEUE_BYTES = 4 * 1024 * 1024;
 
 /** The JSON size of a value, or Infinity if it is not plain data. */
 function jsonSize(v) {
@@ -40,21 +46,44 @@ const cut = (s, max) => String(s).slice(0, max);
 // start. Each `start` begins a new batch; the host's frame takes the batch for its match.
 
 const relayBuffers = new WeakMap();
+const isStart = (msg) => msg.t === S2C.RELAY_EVENT && msg.ev === 'start';
+const matchIdOf = (msg) => (typeof msg.matchId === 'string' ? msg.matchId : null);
 
 /** Starts holding relay:event and relay:in messages for the host's frame. Call once per Net. */
 export function bufferRelays(net) {
   if (relayBuffers.has(net)) return;
-  const buf = { matchId: null, msgs: [], sink: null };
+  const buf = {
+    matchId: null, // the match the held messages belong to
+    msgs: [],
+    bytes: 0,
+    sink: null, // the host frame taking messages now
+    sinkMatchId: null,
+    clear() {
+      this.matchId = null;
+      this.msgs = [];
+      this.bytes = 0;
+    },
+  };
   const onMsg = (msg) => {
+    // A new match that is not the attached frame's: that frame is done, hold for the next one.
+    if (buf.sink && isStart(msg) && matchIdOf(msg) !== buf.sinkMatchId) buf.sink = null;
     if (buf.sink) return buf.sink(msg);
-    if (msg.t === S2C.RELAY_EVENT && msg.ev === 'start') {
-      buf.matchId = typeof msg.matchId === 'string' ? msg.matchId : null;
-      buf.msgs = [];
+    if (isStart(msg)) {
+      buf.clear();
+      buf.matchId = matchIdOf(msg);
+    } else if (msg.t === S2C.RELAY_EVENT && msg.ev === 'end') {
+      // Nobody took that match's messages; they will never be wanted.
+      buf.clear();
+      return;
     }
-    // Over the cap, player input is dropped first: it is stale by the time the frame loads.
-    if (buf.msgs.length >= BUFFER_MAX && msg.t === S2C.RELAY_IN) return;
-    if (buf.msgs.length >= BUFFER_MAX * 2) return;
+    const size = jsonSize(msg);
+    // Over three quarters of either cap, player input is dropped first: it is stale by the time
+    // the frame loads. Nothing goes past the caps themselves.
+    const nearFull = buf.msgs.length >= RELAY_HELD_MAX * 0.75 || buf.bytes + size > RELAY_HELD_BYTES * 0.75;
+    if (nearFull && msg.t === S2C.RELAY_IN) return;
+    if (buf.msgs.length >= RELAY_HELD_MAX || buf.bytes + size > RELAY_HELD_BYTES) return;
     buf.msgs.push(msg);
+    buf.bytes += size;
   };
   net.on(S2C.RELAY_EVENT, onMsg);
   net.on(S2C.RELAY_IN, onMsg);
@@ -69,12 +98,22 @@ function takeRelays(net, matchId, sink) {
     const offs = [net.on(S2C.RELAY_EVENT, sink), net.on(S2C.RELAY_IN, sink)];
     return () => offs.forEach((off) => off());
   }
-  const held = buf.matchId === matchId ? buf.msgs : [];
-  buf.msgs = [];
   buf.sink = sink;
-  for (const msg of held) sink(msg);
+  buf.sinkMatchId = matchId;
+  // Messages held for another match stay held; they are not this frame's.
+  if (buf.matchId === matchId) {
+    const held = buf.msgs;
+    buf.clear();
+    for (const msg of held) {
+      if (buf.sink !== sink) break;
+      sink(msg);
+    }
+  }
   return () => {
-    if (buf.sink === sink) buf.sink = null;
+    if (buf.sink !== sink) return;
+    buf.sink = null;
+    buf.sinkMatchId = null;
+    buf.clear();
   };
 }
 
@@ -88,8 +127,8 @@ function takeRelays(net, matchId, sink) {
  * @param {HTMLElement} o.container
  * @param {object} [o.overlay]  { onKey(type, code), openMenu, openTeamPicker, showScorebar(show),
  *   showHint(show), isBlocking(), onUi(fn) (fn gets 'block' | 'resume'; returns an unsubscribe),
- *   onLock(locked), onMounted({ teamPicker }), onError(text), onStalled(), onMeta(meta, kitVersion) }.
- *   Every member is optional.
+ *   onLock(locked), onMounted({ teamPicker }), onError(text), onMeta(meta, kitVersion) }.
+ *   Every member is optional. onError also fires when the frame never starts, which removes it.
  * @param {string} [o.title]                    the iframe's accessible name
  * @returns {{ destroy(): void, matchEnded(result): boolean, exitLock(): void, readonly iframe: HTMLIFrameElement }}
  */
@@ -104,7 +143,11 @@ export function mountGameFrame({ net, store, role, src, container, overlay = {},
   iframe.src = `/frame/?src=${encodeURIComponent(src)}&parent=${encodeURIComponent(location.origin)}`;
 
   const cleanups = [];
-  const queue = []; // messages for the frame, held until it has its `init`
+  // Messages for the frame, held until it has its `init`: events in order, and the latest of
+  // each state message (a newer room snapshot or clock replaces the older one).
+  const queue = [];
+  let queueBytes = 0;
+  const latest = new Map(); // 'room' | 'clock' -> fields
   let gotReady = false;
   let inited = false;
   let destroyed = false;
@@ -126,8 +169,15 @@ export function mountGameFrame({ net, store, role, src, container, overlay = {},
 
   function post(kind, fields = {}) {
     if (destroyed) return;
-    if (inited) postNow(kind, fields);
-    else queue.push([kind, fields]);
+    if (inited) return postNow(kind, fields);
+    if (kind === 'room' || kind === 'clock') {
+      latest.set(kind, fields);
+      return;
+    }
+    queueBytes += jsonSize(fields);
+    queue.push([kind, fields]);
+    // A frame that has not started after this much never will: stop holding and say so.
+    if (queue.length > QUEUE_MAX || queueBytes > QUEUE_BYTES) failToStart();
   }
 
   function sendInit() {
@@ -142,7 +192,23 @@ export function mountGameFrame({ net, store, role, src, container, overlay = {},
     });
     inited = true;
     if (role !== 'inspect') postNow('ui', { blocking: Boolean(overlay.isBlocking?.()) });
+    if (latest.has('room')) postNow('room', latest.get('room'));
     for (const [kind, fields] of queue.splice(0)) postNow(kind, fields);
+    if (latest.has('clock')) postNow('clock', latest.get('clock'));
+    latest.clear();
+    queueBytes = 0;
+    takeServerMessages();
+  }
+
+  /** The frame never said `ready` (a refused page, boot.js failed, a CSP error): give up on it. */
+  function failToStart() {
+    if (destroyed || inited) return;
+    const wasHost = role === 'host';
+    destroy();
+    const detail = 'the game frame never started';
+    // The host's frame was to run the game for everyone: end the match, the way a crash does.
+    if (wasHost) net.send(C2S.RELAY, { msgs: [{ k: 'ctx', op: 'endMatch', args: [{ text: COPY.gameCrashed(detail), error: true }, {}] }] });
+    overlay.onError?.(COPY.gameWontLoad(detail));
   }
 
   // ---- the frame left the page ----
@@ -160,9 +226,10 @@ export function mountGameFrame({ net, store, role, src, container, overlay = {},
     loads += 1;
     // The frame page loads once. A second load means it went somewhere else.
     if (loads > 1) return navigatedAway();
-    // A refused page (bad or blocked source) shows its own text and never says ready.
+    // boot.js says ready as it runs, before this load event, so a frame still silent well after
+    // it never started (a refused page, a script that failed).
     readyTimer = setTimeout(() => {
-      if (!gotReady && !destroyed) overlay.onStalled?.();
+      if (!gotReady) failToStart();
     }, READY_WAIT_MS);
   });
   cleanups.push(() => clearTimeout(readyTimer));
@@ -254,9 +321,14 @@ export function mountGameFrame({ net, store, role, src, container, overlay = {},
     });
     if (typeof offUi === 'function') cleanups.push(offUi);
   }
-  if (role === 'host') {
-    // relay:event and relay:in go to the host's frame only.
-    cleanups.push(takeRelays(net, store.room?.match?.matchId ?? null, (msg) => post('server', { msg })));
+  // relay:event and relay:in go to the host's frame only. They stay in bufferRelays' buffer (with
+  // its own budget) until the frame has its `init`, so they never fill this mount's queue.
+  const matchId = store.room?.match?.matchId ?? null;
+  function takeServerMessages() {
+    if (role !== 'host' || destroyed) return;
+    const detach = takeRelays(net, matchId, (msg) => post('server', { msg }));
+    if (destroyed) detach();
+    else cleanups.push(detach);
   }
 
   function focus() {
@@ -277,6 +349,7 @@ export function mountGameFrame({ net, store, role, src, container, overlay = {},
     if (inited) postNow('destroy', {});
     destroyed = true;
     queue.length = 0;
+    latest.clear();
     for (const off of cleanups.splice(0)) off();
     // Removing the frame ends its document and its worker, whatever the game does with `destroy`.
     iframe.remove();

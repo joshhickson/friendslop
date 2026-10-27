@@ -62,6 +62,21 @@ function treeUrl(repo, commit, path) {
   return commit && path ? `https://github.com/${repo}/tree/${commit}/${path}` : `https://github.com/${repo}`;
 }
 
+/** The prefilled GitHub issue link, or null when there is no usable report address. */
+function reportLink(reportUrl, title, body) {
+  if (!reportUrl) return null;
+  let url;
+  try {
+    url = new URL(reportUrl);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+  url.searchParams.set('title', title);
+  url.searchParams.set('body', body);
+  return url.href;
+}
+
 /**
  * The strip across the top of an unreviewed game: COPY.unreviewedBanner with the repo as a link
  * to GitHub and its "Report it" as a link to a prefilled GitHub issue, then COPY.hostCanCheat.
@@ -71,16 +86,15 @@ function treeUrl(repo, commit, path) {
  */
 export function unreviewedBanner({ repo, maker, reportUrl, commit = '', path = '' }) {
   const link = (href, text) => h('a', { href, target: '_blank', rel: 'noopener noreferrer' }, text);
-  const title = `Report: ${repo}@${commit.slice(0, 7)}`;
-  const body = `${treeUrl(repo, commit, path)}\n\n`;
-  const report = `${reportUrl}?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+  const report = reportLink(reportUrl, `Report: ${repo}@${commit.slice(0, 7)}`, `${treeUrl(repo, commit, path)}\n\n`);
 
   // Build the sentence from the copy with markers, so Josh can move the maker and repo around.
   let text = COPY.unreviewedBanner(MAKER_MARK, REPO_MARK);
   let tail = null;
   const m = REPORT_TAIL.exec(text);
   if (m) {
-    tail = link(report, m[0].trim());
+    // With nowhere to report to, the "Report it" ending is dropped rather than left dead.
+    if (report) tail = link(report, m[0].trim());
     text = text.slice(0, m.index);
   }
   const parts = [];
@@ -90,6 +104,6 @@ export function unreviewedBanner({ repo, maker, reportUrl, commit = '', path = '
     else if (piece) parts.push(piece);
   }
   // If a rewrite drops the "Report it" ending, the report link still has to be there.
-  if (!tail) tail = link(report, COPY.reportGame);
+  if (!tail && report) tail = link(report, COPY.reportGame);
   return h('div.unreviewed', h('div.unreviewed-main', parts, tail), h('div.unreviewed-sub', COPY.hostCanCheat));
 }

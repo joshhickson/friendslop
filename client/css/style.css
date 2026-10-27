@@ -140,7 +140,6 @@ input.code { text-transform: uppercase; letter-spacing: 3px; font-weight: 700; }
 .first-look { position: fixed; inset: 0; background: rgba(8, 10, 14, .85); display: flex; align-items: center; justify-content: center; z-index: 150; backdrop-filter: blur(3px); }
 .first-look .modal { width: min(520px, calc(100% - 32px)); }
 .first-look p { margin: 0; font-size: 16px; line-height: 1.5; }
-.loading.stalled { display: none; }
 
 #toasts { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; z-index: 100; pointer-events: none; align-items: center; }
 .toast { background: var(--panel); border: 1px solid var(--line); padding: 9px 16px; border-radius: 8px; transition: opacity .4s; box-shadow: 0 4px 20px rgba(0,0,0,.4); }
