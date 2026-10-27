@@ -14,6 +14,9 @@ const BAD_LINK = Object.freeze({
 export const COPY = Object.freeze({
   unreviewedBanner: (maker, repo) => `Nobody at friendslop has played this yet. It could be a masterpiece. It could be three cubes and a dream. Made by ${maker} (${repo}). Report it`,
   firstLook: 'Heads up: nobody has checked this game. Like any website, it can see your IP address. It probably just wants to show you some cubes. Play anyway?',
+  firstLookPlay: 'Play anyway',
+  leaveTheRoom: 'Leave the room',
+  reportGame: 'Report this game',
   hostCanCheat: "The host's computer runs the game, so the host could change the score. Choose your friends carefully.",
   hostLeft: 'The host left and took the whole game with them. Bold move. Back to the lobby.',
   dataBudget: "friendslop has used up today's internet. New games can start after midnight UTC. Matches already running can finish.",

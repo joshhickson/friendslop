@@ -6,11 +6,14 @@ import { store, session } from './state.js';
 import { homeScreen } from './screens/home.js';
 import { lobbyScreen } from './screens/lobby.js';
 import { matchScreen } from './screens/match.js';
+import { bufferRelays } from './frame-host.js';
 import { C2S, S2C } from '/shared/protocol.js';
 import { COPY } from '/shared/copy.js';
 
 const appEl = document.getElementById('app');
 const net = new Net();
+// A host-run game's first relay messages arrive before the match screen does: hold them for its frame.
+bufferRelays(net);
 const params = new URLSearchParams(location.search);
 let screen = null;
 let screenKind = null;

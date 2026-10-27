@@ -5,18 +5,29 @@ import { h, replace, toast } from '../dom.js';
 import { store } from '../state.js';
 import { Emitter } from '../net.js';
 import { teamColumns, scoreboardTable, chatLine, canPickTeam } from '../components.js';
+import { mountGameFrame } from '../frame-host.js';
+import { confirmFirstLook, unreviewedBanner } from '../unreviewed.js';
 import { C2S } from '/shared/protocol.js';
+import { COPY } from '/shared/copy.js';
+import { parseRef, repoKey } from '/shared/gameref.js';
 
 const CHAT_FADE_MS = 8000;
 
 export function matchScreen(net, app) {
   const room = store.room;
   const gameId = room.game.id;
+  // A game from GitHub runs in a sandboxed frame; a game from GAMES_DIR is imported directly.
+  const source = room.game.source ?? null;
+  const ref = source ? parseRef(source) : null;
   const root = h('div.game-root');
   const hud = h('div.game-hud');
   const overlay = h('div.overlay');
   const loading = h('div.loading', `Loading ${room.game.name}…`);
-  const el = h('div', { style: { position: 'absolute', inset: 0 } }, root, hud, overlay, loading);
+  const el = ref
+    ? h('div.match-col',
+      unreviewedBanner({ repo: `${ref.user}/${ref.repo}`, maker: ref.user, reportUrl: store.hello?.remote?.reportUrl ?? '', commit: ref.commit, path: ref.path }),
+      h('div.match-stage', root, hud, overlay, loading))
+    : h('div', { style: { position: 'absolute', inset: 0 } }, root, hud, overlay, loading);
 
   const gameEvents = new Emitter();
   const matchEndHandlers = new Set();
@@ -31,6 +42,13 @@ export function matchScreen(net, app) {
   let expectUnlock = false;
   let hadLock = false;
   let menuOpenedByUnlockAt = 0;
+  let frame = null; // a GitHub game's frame (frame-host.js)
+  let frameLocked = false; // the frame's own pointer lock, from its `lock` messages
+  let gated = Boolean(ref); // the first-look screen may be up: the overlay ignores keys
+
+  // The frame holds its own pointer lock, which this page cannot see or release directly.
+  const isLocked = () => (ref ? frameLocked : Boolean(document.pointerLockElement));
+  const releaseLock = () => (ref ? frame?.exitLock() : document.exitPointerLock());
 
   // ---------- overlay pieces ----------
   const scorebar = h('div.scorebar');
@@ -133,9 +151,9 @@ export function matchScreen(net, app) {
     modal = kind;
     showScores = false;
     renderScores();
-    if (document.pointerLockElement) {
+    if (isLocked()) {
       expectUnlock = true;
-      document.exitPointerLock();
+      releaseLock();
     }
     renderModal();
     uiEvents.emit('block');
@@ -152,9 +170,9 @@ export function matchScreen(net, app) {
   function openChat() {
     chatOpen = true;
     chatBox.classList.add('open');
-    if (document.pointerLockElement) {
+    if (isLocked()) {
       expectUnlock = true;
-      document.exitPointerLock();
+      releaseLock();
     }
     renderChat();
     setTimeout(() => chatInput.focus());
@@ -177,9 +195,12 @@ export function matchScreen(net, app) {
   }
 
   // ---------- keyboard ----------
-  const onKeyDown = (e) => {
-    if (e.code === 'Tab') {
-      e.preventDefault();
+  // A GitHub game's frame passes these keys on while it has focus (frame-host.js), with no
+  // event to cancel, so the handlers take a key code and a preventDefault.
+  const keyDown = (code, preventDefault) => {
+    if (gated || destroyed) return;
+    if (code === 'Tab') {
+      preventDefault();
       if (!showScores && !modal && !chatOpen) {
         showScores = true;
         renderScores();
@@ -187,34 +208,36 @@ export function matchScreen(net, app) {
       return;
     }
     if (chatOpen) {
-      if (e.code === 'Escape') {
-        e.preventDefault();
+      if (code === 'Escape') {
+        preventDefault();
         closeChat();
       }
       return;
     }
-    if ((e.code === 'Enter' || e.code === 'NumpadEnter') && !modal) {
-      e.preventDefault();
+    if ((code === 'Enter' || code === 'NumpadEnter') && !modal) {
+      preventDefault();
       openChat();
       return;
     }
-    if (e.code === 'Escape') {
+    if (code === 'Escape') {
       // The same Esc press that released the pointer may also arrive here; don't let it close the menu again.
       if (performance.now() - menuOpenedByUnlockAt < 300) return;
       if (modal === 'menu') closeModal(true);
       else if (!modal) openModal('menu');
     }
   };
-  const onKeyUp = (e) => {
-    if (e.code === 'Tab') {
+  const keyUp = (code) => {
+    if (code === 'Tab') {
       showScores = false;
       renderScores();
     }
   };
+  const onKeyDown = (e) => keyDown(e.code, () => e.preventDefault());
+  const onKeyUp = (e) => keyUp(e.code);
   // Browsers swallow the first Esc to release pointer lock, so treat an unexpected
   // unlock as "open the pause menu".
-  const onLockChange = () => {
-    if (document.pointerLockElement) {
+  const lockChanged = (locked) => {
+    if (locked) {
       hadLock = true;
       return;
     }
@@ -227,9 +250,11 @@ export function matchScreen(net, app) {
       openModal('menu');
     }
   };
+  const onLockChange = () => lockChanged(Boolean(document.pointerLockElement));
   window.addEventListener('keydown', onKeyDown, true);
   window.addEventListener('keyup', onKeyUp, true);
-  document.addEventListener('pointerlockchange', onLockChange);
+  // A GitHub game's lock lives in its frame, and the frame reports it (R6).
+  if (!ref) document.addEventListener('pointerlockchange', onLockChange);
   cleanups.push(() => {
     window.removeEventListener('keydown', onKeyDown, true);
     window.removeEventListener('keyup', onKeyUp, true);
@@ -315,7 +340,66 @@ export function matchScreen(net, app) {
   };
 
   // ---------- load + mount the game ----------
-  (async () => {
+  function mounted(teamPicker) {
+    if (destroyed || ready) return;
+    loading.remove();
+    renderScorebar();
+    renderChat();
+    // Team games: let the player pick a team on map load before spawning in.
+    // Spectators who chose that in the lobby go straight in to watch.
+    if (store.room.game.teams && teamPicker && !store.myPlayer?.spectating) openModal('teams');
+    else sendReady();
+  }
+
+  // A GitHub game: the first look, then the sandboxed frame. The overlay above stays this page's.
+  async function mountFrame() {
+    const firstLook = new AbortController();
+    cleanups.push(() => firstLook.abort());
+    const yes = await confirmFirstLook(repoKey(ref), { signal: firstLook.signal });
+    if (destroyed) return;
+    if (!yes) {
+      net.send(C2S.LEAVE);
+      return;
+    }
+    gated = false;
+    const fail = (text) => {
+      if (destroyed) return;
+      loading.classList.remove('stalled');
+      if (!loading.isConnected) el.querySelector('.match-stage').append(loading);
+      replace(loading, h('div.panel.stack', h('b', text), h('button.btn', { onclick: () => net.send(C2S.LEAVE) }, COPY.leaveTheRoom)));
+    };
+    frame = mountGameFrame({
+      net,
+      store,
+      role: store.isHost ? 'host' : 'player',
+      src: source,
+      container: root,
+      title: room.game.name,
+      overlay: {
+        onKey: (type, code) => (type === 'down' ? keyDown(code, () => {}) : keyUp(code)),
+        onLock: (locked) => {
+          frameLocked = locked;
+          lockChanged(locked);
+        },
+        openMenu: api.ui.openMenu,
+        openTeamPicker: api.ui.openTeamPicker,
+        showScorebar: api.ui.showScorebar,
+        showHint: api.ui.showHint,
+        isBlocking: api.ui.isBlocking,
+        onUi: (fn) => {
+          const offs = ['block', 'resume'].map((ev) => uiEvents.on(ev, () => fn(ev)));
+          return () => offs.forEach((off) => off());
+        },
+        onMounted: ({ teamPicker }) => mounted(teamPicker),
+        onError: fail,
+        // The frame refused the game and shows why itself: get out of its way.
+        onStalled: () => loading.classList.add('stalled'),
+      },
+    });
+  }
+
+  if (ref) mountFrame();
+  else (async () => {
     let mod;
     try {
       mod = await import(`/games/${gameId}/client/index.js`);
@@ -339,19 +423,16 @@ export function matchScreen(net, app) {
       instance.destroy?.();
       return;
     }
-    loading.remove();
-    renderScorebar();
-    renderChat();
-    // Team games: let the player pick a team on map load before spawning in.
-    // Spectators who chose that in the lobby go straight in to watch.
-    if (store.room.game.teams && def.teamPicker !== false && !store.myPlayer?.spectating) openModal('teams');
-    else sendReady();
+    mounted(def.teamPicker !== false);
   })();
 
   return {
     el,
     /** Called by app.js on MATCH_END. Returns true if the game handled it. */
     matchEnded(result) {
+      // The frame shows the game's ending only while it is still up, so with no results period
+      // (the screen closes at once) the framework's toast still shows.
+      if (ref) return frame ? frame.matchEnded(result) && Boolean(result?.returnAt) : false;
       for (const fn of [...matchEndHandlers]) {
         try {
           fn(result);
@@ -368,6 +449,7 @@ export function matchScreen(net, app) {
       } catch (err) {
         console.error('game destroy() failed', err);
       }
+      frame?.destroy();
       for (const off of cleanups) off();
       if (document.pointerLockElement) document.exitPointerLock();
       app.setTitle();
