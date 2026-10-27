@@ -5,7 +5,8 @@ One central Node server, WebSockets, rooms with a code and password, a lobby wit
 and a browser client. Games are drop-in folders, and a game in a public GitHub repo gets an instant
 room link with nothing to host.
 
-**Status: alpha.** Teaser and roadmap: [friendslop.us](https://friendslop.us)
+**Status: alpha.** Teaser and roadmap: [friendslop.us](https://friendslop.us). Play at
+[play.friendslop.us](https://play.friendslop.us). Pull requests welcome ([how](CONTRIBUTING.md)).
 
 **No games are included yet.** The alpha is the framework: rooms, the lobby, teams, bots, spectating
 and hosting. You bring the game. `npm run new-game` starts you from a template where everyone is a dot
@@ -257,6 +258,13 @@ and the dev CDN.
 - bots in any language, from a short Python script to an AI agent
 
 Expect the JavaScript parts to be rewritten or joined by others as the project grows.
+
+## Contributing
+
+Pull requests are welcome: fixes, docs, templates and kit features. [CONTRIBUTING.md](CONTRIBUTING.md)
+says how. Made a game? [Open an issue](https://github.com/joshhickson/friendslop/issues/new?title=My%20game%3A%20)
+with the link to its folder and it can go on the [games page](https://friendslop.us/games/). Questions
+and ideas go in [issues](https://github.com/joshhickson/friendslop/issues) too.
 
 ## License
 
