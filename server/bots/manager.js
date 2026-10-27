@@ -20,6 +20,18 @@ const BOT_NAMES = [
   'Gear', 'Sparky', 'Ratchet', 'Piston', 'Fuse', 'Diode', 'Volt', 'Ohm', 'Axle', 'Lug', 'Bit', 'Pico', 'Nano', 'Tesla', 'Relay', 'Crank',
 ];
 
+/**
+ * A bot name that no player in `room` has, and that none of the `tickets` (bots promised to the
+ * room that haven't finished joining) has taken.
+ */
+export function pickBotName(room, tickets = new Map()) {
+  const taken = new Set([...room.players.values()].map((p) => p.name.toLowerCase()));
+  for (const t of tickets.values()) if (t.roomId === room.id) taken.add(t.name.toLowerCase());
+  const free = BOT_NAMES.filter((n) => !taken.has(`${n} (bot)`.toLowerCase()));
+  if (free.length) return `${free[Math.floor(Math.random() * free.length)]} (bot)`;
+  for (let i = 2; ; i++) if (!taken.has(`bot ${i} (bot)`)) return `Bot ${i} (bot)`;
+}
+
 export class BotManager {
   constructor({ config, log, gamesDir }) {
     this.config = config;
@@ -63,12 +75,7 @@ export class BotManager {
   }
 
   pickName(room) {
-    const taken = new Set([...room.players.values()].map((p) => p.name.toLowerCase()));
-    // Also skip names promised to bots that haven't finished joining yet.
-    for (const t of this.tickets.values()) if (t.roomId === room.id) taken.add(t.name.toLowerCase());
-    const free = BOT_NAMES.filter((n) => !taken.has(`${n} (bot)`.toLowerCase()));
-    if (free.length) return `${free[Math.floor(Math.random() * free.length)]} (bot)`;
-    for (let i = 2; ; i++) if (!taken.has(`bot ${i} (bot)`)) return `Bot ${i} (bot)`;
+    return pickBotName(room, this.tickets);
   }
 
   /** Spawns one bot into `room`. Resolves once it has joined. */

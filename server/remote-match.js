@@ -10,6 +10,7 @@ import { randomId, TokenBucket } from './security.js';
 import { STAT_KEY_RE } from './kit/defineGame.js';
 import { S2C, LIMITS, cleanText } from '../shared/protocol.js';
 import { COPY } from '../shared/copy.js';
+import { VirtualConn } from './bots/virtual.js';
 
 const STAT_TEXT_MAX = 64;
 const TYPE_MAX = 64; // the same cap Connection puts on a player's game message type
@@ -43,6 +44,9 @@ export class RemoteMatch {
 
   start() {
     this.#event('start', { matchId: this.id, settings: this.settings, game: { id: this.def.id }, startedAt: this.startedAt });
+    // Bots added in the lobby have nothing to load: they are in the match now, and the runner
+    // is told to run their brains. Humans join when their own page has loaded the game.
+    for (const p of this.room.players.values()) if (p.conn instanceof VirtualConn) this.room.playerLoaded(p);
   }
 
   stop() {
@@ -64,7 +68,8 @@ export class RemoteMatch {
   playerReady(player) {
     if (this.ended || this.active.has(player.id) || this.watchers.has(player.id)) return;
     (player.spectating ? this.watchers : this.active).add(player.id);
-    this.#event('join', { id: player.id, spectator: player.spectating, virtual: false, options: {} });
+    const virtual = player.conn instanceof VirtualConn;
+    this.#event('join', { id: player.id, spectator: player.spectating, virtual, options: virtual ? { difficulty: player.difficulty ?? 'normal' } : {} });
   }
 
   playerGone(player) {

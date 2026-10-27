@@ -341,3 +341,103 @@ test('huge relays over the budget during a match end it, and the socket stays op
   await s.host.next((m) => m.t === 'pong', 10000);
   assert.equal(s.host.ws.readyState, 1);
 });
+
+// ---- lobby bots in a remote room: players the runner controls, with no socket ----
+
+/** A remote room with only a host. */
+async function soloHost(def) {
+  const host = await client();
+  host.send('room:create', { name: 'Host', password: '', source: SOURCE, def });
+  const hw = await host.next((m) => m.t === 'welcome');
+  return { host, hostId: hw.you, roomId: hw.room.id };
+}
+
+const room = (roomId) => srv.server.manager.rooms.get(roomId);
+
+test("a remote room's host adds bots that need no socket", async () => {
+  const { host, hostId, roomId } = await soloHost(metaOf(dots, true));
+  const sockets = srv.server.wss.clients.size;
+  host.send('room:bots', { add: 2 });
+  const r = await host.roomWhere((x) => x.players.filter((p) => p.bot).length === 2);
+  const bots = r.players.filter((p) => p.bot);
+  assert.ok(bots.every((p) => p.connected));
+  assert.equal(r.botsSupported, true);
+  assert.equal(r.hostId, hostId, 'the host stays host');
+  assert.equal(new Set(bots.map((p) => p.name)).size, 2, 'unique names');
+  assert.equal(srv.server.wss.clients.size, sockets, 'no new sockets');
+  host.send('room:bots', { remove: 'all' });
+  await host.nextRoomWhere((x) => x.players.length === 1);
+});
+
+test('bots in a remote room join the match as virtual players', async () => {
+  const s = await setup(metaOf(dots, true));
+  s.host.send('room:bots', { add: 2, difficulty: 'hard' });
+  const r = await s.host.roomWhere((x) => x.players.filter((p) => p.bot).length === 2);
+  const botIds = r.players.filter((p) => p.bot).map((p) => p.id);
+  await play(s);
+  for (const id of botIds) {
+    const join = await s.host.waitFor(isEvent('join', (m) => m.id === id));
+    assert.equal(join.virtual, true);
+    assert.equal(join.spectator, false);
+    assert.deepEqual(join.options, { difficulty: 'hard' });
+  }
+  // Humans still join as themselves, and bots take part in team sends.
+  const humanJoin = s.host.messages.find(isEvent('join', (m) => m.id === s.guestId));
+  assert.equal(humanJoin.virtual, false);
+  assert.deepEqual(humanJoin.options, {});
+  assert.ok(!s.guest.messages.some((m) => m.t.startsWith('relay')));
+  const inMatch = await s.host.roomWhere((x) => x.players.filter((p) => p.inMatch).length === 4);
+  assert.ok(inMatch.players.filter((p) => p.bot).every((p) => p.inMatch));
+});
+
+test('a bot added during a match joins it at once, and removing it tells the runner', async () => {
+  const s = await setup(metaOf(dots, true));
+  await play(s);
+  s.host.send('room:bots', { add: 1, team: 'red' });
+  const join = await s.host.next(isEvent('join', (m) => m.virtual === true));
+  assert.deepEqual(join.options, { difficulty: 'normal' });
+  s.host.send('room:bots', { remove: join.id });
+  const leave = await s.host.next(isEvent('leave', (m) => m.id === join.id));
+  assert.equal(leave.id, join.id);
+});
+
+test('remote auto-fill tops teams up with virtual bots', async () => {
+  const meta = { ...metaOf(dots, true), autoFill: { perTeam: 2 } };
+  const s = await soloHost(meta);
+  const sockets = srv.server.wss.clients.size;
+  s.host.send('room:start');
+  await s.host.next((m) => m.t === 'match:start');
+  const r = await s.host.roomWhere((x) => x.phase === 'playing' && x.players.filter((p) => p.bot).length === 3);
+  const bots = r.players.filter((p) => p.bot);
+  const counts = { red: 0, blue: 0 };
+  for (const p of r.players) counts[p.team]++;
+  assert.deepEqual(counts, { red: 2, blue: 2 });
+  assert.equal(srv.server.wss.clients.size, sockets);
+  s.host.send('match:ready');
+  for (const b of bots) {
+    const join = await s.host.waitFor(isEvent('join', (m) => m.id === b.id));
+    assert.equal(join.virtual, true);
+  }
+  // Fillers leave with the match, which the runner hears as its end.
+  s.host.send('room:end');
+  await s.host.waitFor(isEvent('end'));
+  await s.host.nextRoomWhere((x) => x.phase === 'lobby' && x.players.length === 1);
+});
+
+test('without hasBot, bots are refused', async () => {
+  const { host } = await soloHost(metaOf(dots, false));
+  host.send('room:bots', { add: 1 });
+  assert.equal((await host.next((m) => m.t === 'error')).code, 'no_bots');
+  const r = await host.roomWhere(() => true);
+  assert.equal(r.botsSupported, false);
+});
+
+test('bots alone never keep a remote room open', async () => {
+  const { host, roomId } = await soloHost(metaOf(dots, true));
+  host.send('room:bots', { add: 2 });
+  await host.roomWhere((x) => x.players.filter((p) => p.bot).length === 2);
+  assert.ok(room(roomId));
+  host.send('room:leave');
+  await sleep(150);
+  assert.equal(srv.server.manager.rooms.has(roomId), false);
+});

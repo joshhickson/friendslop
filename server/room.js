@@ -3,6 +3,7 @@
 
 import { Match } from './match.js';
 import { RemoteMatch } from './remote-match.js';
+import { VirtualBots, VirtualConn } from './bots/virtual.js';
 import { coerceSettings } from './kit/defineGame.js';
 import { randomId, randomToken } from './security.js';
 import { S2C, cleanText, LIMITS } from '../shared/protocol.js';
@@ -26,6 +27,7 @@ class Player {
     this.loaded = false; // loaded the current match on the client
     this.everConnected = false;
     this.bot = false; // self-declared or host-added bot (shown with a badge, never made host)
+    this.difficulty = null; // a bot's difficulty (for a remote room's bots, handed to the runner on join)
     this.filler = false; // bot added automatically to fill a team (leaves when the match ends)
     this.spectating = false; // watches the match without taking part (games never see spectators as players)
     this.matchTeam = null; // team this player first played on in the current match (for the team-switch lock)
@@ -96,9 +98,18 @@ export class Room {
     return this.maxPlayers + SPECTATOR_SEATS;
   }
 
-  /** Does the server hold a bot brain for this room's game? Games from a GitHub source never run here. */
+  /**
+   * Who adds this room's lobby bots. A game from a GitHub source runs in the host's browser, and
+   * so do its bots: they are virtual players with no socket. Every other game uses the BotManager.
+   */
+  get bots() {
+    if (this.def.source) return (this.virtualBots ??= new VirtualBots(this));
+    return this.owner.bots;
+  }
+
+  /** Is there a bot brain for this room's game? (On the server, or with the host's runner.) */
   #hasBotBrain() {
-    return !this.def.source && Boolean(this.owner.bots?.hasBrain(this.def.id));
+    return Boolean(this.bots?.hasBrain(this.def.id));
   }
 
   /** Will bots top the teams up when the match starts? (game has autoFill, and it's switched on) */
@@ -166,7 +177,7 @@ export class Room {
 
   /** Host action: add `count` bots (each one is a separate WebSocket client). Returns an error code or null. */
   addBots({ count = 1, team = 'auto', difficulty = 'normal' } = {}) {
-    const bots = this.owner.bots;
+    const bots = this.bots;
     if (!this.#hasBotBrain()) return 'no_bots';
     if (team !== 'auto' && !this.def.teams?.some((t) => t.id === team)) return 'bad_team';
     const n = Math.max(0, Math.min(Math.floor(Number(count) || 0), this.maxPlayers - this.playingCount - this.#pendingBots()));
@@ -186,7 +197,7 @@ export class Room {
     const fill = this.def.autoFill;
     if (!fill || !this.match || this.phase !== 'playing' || this.balancing) return;
     if (fill.setting && !this.settings[fill.setting]) return;
-    const bots = this.owner.bots;
+    const bots = this.bots;
     if (!this.#hasBotBrain()) return;
     const difficulty = fill.difficultySetting ? this.settings[fill.difficultySetting] : 'normal';
     const pending = bots.pending(this);
@@ -212,7 +223,7 @@ export class Room {
   }
 
   #pendingBots() {
-    return Object.values(this.owner.bots?.pending(this) ?? {}).reduce((a, b) => a + b, 0);
+    return Object.values(this.bots?.pending(this) ?? {}).reduce((a, b) => a + b, 0);
   }
 
   /** Host action: remove one bot by id, or every bot with 'all'. */
@@ -595,7 +606,7 @@ export class Room {
       settings: this.settings,
       options: this.options,
       teamScores: this.teamScores,
-      botsSupported: def.source ? def.hasBot : Boolean(this.owner.bots?.hasBrain(def.id)),
+      botsSupported: this.#hasBotBrain(),
       // Bots will fill the teams to this many each at match start (null: no auto-fill).
       autoFill: this.willAutoFill ? def.autoFill.perTeam : null,
       players: [...this.players.values()].map((p) => ({
@@ -635,6 +646,8 @@ export class Room {
     if (this.match) {
       const m = this.match;
       this.match = null;
+      // A virtual bot has no socket to close: the runner (if it is still there) hears it leave.
+      for (const p of this.players.values()) if (p.conn instanceof VirtualConn) m.playerGone(p);
       m.stop();
     }
     for (const p of this.players.values()) {
