@@ -114,7 +114,7 @@ export function defineGame(def) {
 
 const REMOTE_MAX = Object.freeze({ name: 40, description: 200, teams: 8, settings: 32, scoreboard: 8, controls: 16, controlKey: 24, controlText: 40, options: 32, optionValue: 40, players: 64 });
 const SETTING_KEY_RE = /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/;
-const STAT_KEY_RE = /^[A-Za-z0-9_]{1,32}$/;
+export const STAT_KEY_RE = /^[A-Za-z0-9_]{1,32}$/;
 const COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
 
 function remoteFail(msg) {

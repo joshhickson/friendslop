@@ -210,7 +210,7 @@ export async function createGameServer(config, { log = createLogger(config.logLe
   });
 
   // ---- WebSocket ----
-  const wss = new WebSocketServer({ noServer: true, maxPayload: LIMITS.MAX_MESSAGE_BYTES, perMessageDeflate: false });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: LIMITS.MAX_RELAY_BYTES, perMessageDeflate: false });
   const perIp = new Map();
   let players = 0; // connections other than the server's own bots
   let proxyHeadersLogged = false;

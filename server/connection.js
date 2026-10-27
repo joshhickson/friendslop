@@ -91,7 +91,11 @@ export class Connection {
 
   #onMessage(data, isBinary) {
     this.lastSeen = Date.now();
-    if (isBinary || data.length > LIMITS.MAX_MESSAGE_BYTES) {
+    // ws already refuses anything over MAX_RELAY_BYTES (its maxPayload). Only a `relay` may pass
+    // MAX_MESSAGE_BYTES, and only from the runner of a running match, so nobody else gets a big message parsed.
+    const big = data.length > LIMITS.MAX_MESSAGE_BYTES;
+    const runner = Boolean(this.player) && this.room?.match?.runnerId === this.player.id;
+    if (isBinary || data.length > LIMITS.MAX_RELAY_BYTES || (big && !runner)) {
       this.close(1009, 'message too large');
       return;
     }
@@ -104,6 +108,10 @@ export class Connection {
       msg = JSON.parse(data.toString('utf8'));
     } catch {
       return this.error('bad_request');
+    }
+    if (big && msg?.t !== C2S.RELAY) {
+      this.close(1009, 'message too large');
+      return;
     }
     if (!msg || typeof msg !== 'object' || typeof msg.t !== 'string') return this.error('bad_request');
 
@@ -147,6 +155,10 @@ export class Connection {
       case C2S.GAME:
         if (typeof msg.type === 'string' && msg.type.length <= 64) room.gameMessage(player, msg.type, msg.data);
         return;
+      case C2S.RELAY:
+        // Only a match of a game from a GitHub source takes relays.
+        err = room.match?.relay ? room.match.relay(player, msg.msgs) : 'bad_phase';
+        break;
       case C2S.LEAVE:
         room.removePlayer(player, 'left');
         return;

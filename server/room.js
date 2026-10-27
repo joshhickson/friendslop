@@ -2,6 +2,7 @@
 // teams, and (while playing) a running Match.
 
 import { Match } from './match.js';
+import { RemoteMatch } from './remote-match.js';
 import { coerceSettings } from './kit/defineGame.js';
 import { randomId, randomToken } from './security.js';
 import { S2C, cleanText, LIMITS } from '../shared/protocol.js';
@@ -438,9 +439,12 @@ export class Room {
       if (!p.spectating && this.def.teams && !this.def.teams.some((t) => t.id === p.team)) p.team = this.#autoTeam(p);
       p.matchTeam = p.spectating ? null : p.team;
     }
+    // Built before the phase changes, so a constructor that throws leaves the room in the lobby.
+    // A game from a GitHub source runs in the host's browser; the server only relays it.
+    const match = this.def.source ? new RemoteMatch(this, this.def, this.settings) : new Match(this, this.def, this.settings);
     this.lastResult = null;
     this.phase = 'playing';
-    this.match = new Match(this, this.def, this.settings);
+    this.match = match;
     this.log.info(`match ${this.match.id} started (${this.def.id}, ${this.connectedCount} players)`);
     this.broadcast(S2C.MATCH_START, this.matchInfo());
     this.match.start();

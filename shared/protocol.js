@@ -21,6 +21,17 @@ export const C2S = Object.freeze({
   CHAT: 'chat',              // { text }
   PING: 'ping',              // { c: clientTime, rtt? }
   GAME: 'game',              // { type, data }
+  // Host-run games only, from the runner (the host at match start): { msgs: Item[] }, at most
+  // LIMITS.MAX_RELAY_MSGS items. Item is one of
+  //   { k: 'out', to: 'all', except?, type, data }   what ctx.broadcast reaches
+  //   { k: 'out', to: 'team', team, type, data }     what ctx.sendTeam reaches
+  //   { k: 'out', to: 'player', id, type, data }     what ctx.send reaches
+  //   { k: 'ctx', op: 'setStat', args: [playerId, key, value] }
+  //   { k: 'ctx', op: 'setTeamScore', args: [team, value] }
+  //   { k: 'ctx', op: 'setTeam', args: [playerId, team] }
+  //   { k: 'ctx', op: 'announce', args: [text] }
+  //   { k: 'ctx', op: 'endMatch', args: [result, opts] }
+  RELAY: 'relay',
 });
 
 export const S2C = Object.freeze({
@@ -34,6 +45,17 @@ export const S2C = Object.freeze({
   MATCH_END: 'match:end',    // { result }; result.returnAt set = results period until that server time
   PONG: 'pong',              // { c, s }
   GAME: 'game',              // { type, data }
+  // Host-run games only, sent to the runner alone.
+  RELAY_IN: 'relay:in',      // { from, type, data } a player's game message
+  // { ev, ...fields }, with ev one of
+  //   'start'    { matchId, settings, game: { id }, startedAt }
+  //   'join'     { id, spectator, virtual, options }
+  //   'leave'    { id }
+  //   'team'     { id, oldTeam }
+  //   'spectate' { id, spectating }
+  //   'results'  { result }
+  //   'end'      {}
+  RELAY_EVENT: 'relay:event',
 });
 
 export const LIMITS = Object.freeze({
@@ -42,6 +64,8 @@ export const LIMITS = Object.freeze({
   CHAT_MAX: 200,
   ROOM_ID_LEN: 6,
   MAX_MESSAGE_BYTES: 16 * 1024,
+  MAX_RELAY_BYTES: 256 * 1024, // a `relay` message may be this big; every other message stays under MAX_MESSAGE_BYTES
+  MAX_RELAY_MSGS: 512,
 });
 
 // No 0/O/1/I/L to keep codes easy to read out loud.
