@@ -102,26 +102,28 @@ export class Connection {
       this.close(1009, 'message too large');
       return;
     }
-    // Everyone else is rate limited before parsing. A relayer's message is parsed first, so its
-    // relays can come out of their own bucket.
-    if (!relayer && !this.#takeShared()) return;
+    // Rate limits run before parsing wherever the cost is unknown. A big message (only a relayer
+    // gets this far with one) pays the relay bucket by size first: 16 KB is one token.
+    if (big) {
+      if (!this.relayBucket.take(Math.max(1, Math.ceil(data.length / LIMITS.MAX_MESSAGE_BYTES)))) return this.#relayRefused();
+    } else if (!relayer && !this.#takeShared()) {
+      return;
+    }
     let msg;
     try {
       msg = JSON.parse(data.toString('utf8'));
     } catch {
-      if (relayer && !this.#takeShared()) return;
+      if (relayer && !big && !this.#takeShared()) return;
       return this.error('bad_request');
     }
     if (big && msg?.t !== C2S.RELAY) {
       this.close(1009, 'message too large');
       return;
     }
-    if (relayer) {
+    // A relayer's small message is parsed first, so its relays come out of their own bucket.
+    if (relayer && !big) {
       if (msg?.t === C2S.RELAY) {
-        if (!this.relayBucket.take()) {
-          this.room.match?.relayDropped?.();
-          return;
-        }
+        if (!this.relayBucket.take()) return this.#relayRefused();
       } else if (!this.#takeShared()) {
         return;
       }
@@ -140,6 +142,19 @@ export class Connection {
     if (this.bucket.take()) return true;
     if (++this.floodStrikes > 200) this.close(1008, 'flooding');
     return false;
+  }
+
+  /**
+   * A relay over the relay bucket is dropped. From the runner of a running host-run match it
+   * counts toward the match's drop limit (too many ends the match); anywhere else it is a flood strike.
+   */
+  #relayRefused() {
+    const match = this.room?.match;
+    if (match?.relayDropped && this.room.phase === 'playing' && match.runnerId === this.player?.id) {
+      match.relayDropped();
+      return;
+    }
+    if (++this.floodStrikes > 200) this.close(1008, 'flooding');
   }
 
   /** The runner of the room's match, or the host of a host-run game's room (a late relay gets bad_phase). */

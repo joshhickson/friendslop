@@ -319,3 +319,25 @@ test('a big relay just after the match closed gets bad_phase, and the socket sta
   s.host.send('ping', { c: 1 });
   await s.host.next((m) => m.t === 'pong');
 });
+
+// Just under MAX_RELAY_BYTES once wrapped: each one costs 16 tokens of the runner's relay bucket.
+const HUGE = 'x'.repeat(256 * 1024 - 200);
+
+test('a host flooding huge relays in the lobby is disconnected', { timeout: 15000 }, async () => {
+  const s = await setup();
+  const closed = new Promise((resolve) => s.host.ws.once('close', (code) => resolve(code)));
+  for (let i = 0; i < 320; i++) relay(s.host, [out('all', 'huge', HUGE)]);
+  assert.equal(await closed, 1008);
+});
+
+test('huge relays over the budget during a match end it, and the socket stays open', { timeout: 20000 }, async () => {
+  const s = await setup();
+  await play(s);
+  // Skipped items (no such target) keep the test from echoing megabytes back.
+  for (let i = 0; i < 300; i++) relay(s.host, [{ k: 'out', to: 'nobody', type: 'huge', data: HUGE }]);
+  const end = await s.guest.next((m) => m.t === 'match:end', 10000);
+  assert.equal(end.result.text, COPY.gameTooChatty);
+  s.host.send('ping', { c: 1 });
+  await s.host.next((m) => m.t === 'pong', 10000);
+  assert.equal(s.host.ws.readyState, 1);
+});
