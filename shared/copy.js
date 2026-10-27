@@ -29,6 +29,15 @@ export const COPY = Object.freeze({
   gameLeftFriendslop: 'The game tried to wander off to some other website, and friendslop caught it at the door. Ask its maker to keep it inside the page.',
   badLink: (reason) => BAD_LINK[reason] ?? "Something went wrong with that link and we're not sure what. Check it and try again.",
 
+  // The "Host a game from GitHub" form on the home screen.
+  noGamesYet: 'No games are installed on this server yet. Paste the link to one from GitHub in the box below, or make one with npm run new-game -- my-game and restart the server.',
+  hostTitle: 'Host a game from GitHub',
+  hostHint: 'Paste the link to a game folder on GitHub. Your computer runs the game for everyone in the room.',
+  hostPlaceholder: 'https://github.com/you/your-fork/tree/main/games/your-game',
+  hostButton: 'Host this game',
+  hostChecking: 'Looking at the game...',
+  hostStarter: 'Try the starter game',
+
   // Server error texts that have no spec line of their own.
   badSource: "That game's address didn't make sense to friendslop. Paste the link to the game folder again.",
   notRunner: 'Only the player running the game can do that.',

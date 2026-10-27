@@ -39,7 +39,7 @@ function show(kind, key, make) {
 function route() {
   const room = store.room;
   if (!room) {
-    show('home', null, () => homeScreen(net, { prefillCode: params.get('room') ?? '', preferGame: params.get('game') ?? '' }));
+    show('home', null, () => homeScreen(net, { prefillCode: params.get('room') ?? '', preferGame: params.get('game') ?? '', prefillHost: params.get('host') ?? '' }));
     app.setTitle();
   } else if (room.match && (room.phase === 'playing' || (room.phase === 'results' && screenKind === 'match' && screenKey === room.match.matchId))) {
     // During a results period the match screen stays up for players who were in it.

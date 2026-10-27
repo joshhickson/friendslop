@@ -2,10 +2,17 @@
 
 import { h } from '../dom.js';
 import { store, savedName } from '../state.js';
-import { C2S, LIMITS } from '/shared/protocol.js';
+import { C2S, S2C, LIMITS } from '/shared/protocol.js';
+import { COPY } from '/shared/copy.js';
+import { parseGithubUrl, formatRef, parseRef, repoKey } from '/shared/gameref.js';
+import { resolveCommit, inspectGame } from '../github.js';
+import { confirmFirstLook } from '../unreviewed.js';
 
-export function homeScreen(net, { prefillCode = '', preferGame = '' } = {}) {
-  let tab = prefillCode ? 'join' : 'create';
+const STARTER = `gh:local/friendslop@${'0'.repeat(40)}/templates/starter`;
+const DEFAULT_API = 'https://api.github.com';
+
+export function homeScreen(net, { prefillCode = '', preferGame = '', prefillHost = '' } = {}) {
+  let tab = prefillCode && !prefillHost ? 'join' : 'create';
 
   const name = h('input', { type: 'text', maxLength: LIMITS.NAME_MAX, placeholder: 'Your name', value: savedName.get(), autocomplete: 'off' });
   const code = h('input.code', { type: 'text', maxLength: LIMITS.ROOM_ID_LEN, placeholder: 'ABC123', value: prefillCode, autocomplete: 'off' });
@@ -36,6 +43,88 @@ export function homeScreen(net, { prefillCode = '', preferGame = '' } = {}) {
     net.send(C2S.CREATE, { name: n, game: game.value, password: createPw.value });
   }
 
+  // ---- host a game from a pasted GitHub link ----
+
+  const remote = store.hello?.remote ?? {};
+  const hostLink = h('input', { type: 'text', maxLength: 300, placeholder: COPY.hostPlaceholder, value: prefillHost, autocomplete: 'off', spellcheck: false });
+  const hostPw = h('input', { type: 'password', maxLength: LIMITS.PASSWORD_MAX, placeholder: 'Leave empty for no password', autocomplete: 'new-password' });
+  const hostError = h('p.form-error', { role: 'alert' });
+  const hostButton = h('button.btn.primary', { type: 'submit' }, COPY.hostButton);
+  const starterButton = remote.dev ? h('button.btn', { type: 'button', onclick: () => hostFrom(async () => ({ src: STARTER })) }, COPY.hostStarter) : null;
+  const inspectBox = h('div.inspect-host');
+  const abort = new AbortController();
+  let busy = false;
+  let sent = false;
+  let gone = false;
+
+  function setBusy(on) {
+    busy = on;
+    hostLink.disabled = on;
+    hostButton.disabled = on;
+    if (starterButton) starterButton.disabled = on;
+    hostButton.textContent = on ? COPY.hostChecking : COPY.hostButton;
+  }
+
+  /** From the pasted link to the game's pinned ref: { src } or { text } for the field's error. */
+  async function findLink() {
+    const link = parseGithubUrl(hostLink.value);
+    if (link.error) return { text: COPY.badLink(link.error) };
+    const found = await resolveCommit(link, { api: remote.githubApi || DEFAULT_API });
+    if (found.error) return { text: COPY.badLink(found.error) };
+    const src = formatRef({ user: link.user, repo: link.repo, commit: found.commit, path: link.path });
+    // A folder name the server would refuse (capitals, dots) fails here with a reason, not later.
+    return parseRef(src) ? { src } : { text: COPY.badSource };
+  }
+
+  /** `find` gives { src } or { text }. Then: first look, the hidden check of the game, the room. */
+  async function hostFrom(find) {
+    if (busy) return;
+    const n = getName();
+    if (!n) return;
+    hostError.textContent = '';
+    setBusy(true);
+    const fail = (text) => {
+      if (gone) return;
+      hostError.textContent = text;
+      setBusy(false);
+    };
+    try {
+      const found = await find();
+      if (gone) return;
+      if (!found.src) return fail(found.text);
+      // The game is not run, even to look at it, until this browser has said yes to its repo.
+      const yes = await confirmFirstLook(repoKey(found.src), { signal: abort.signal });
+      if (gone) return;
+      if (!yes) return setBusy(false);
+      const seen = await inspectGame(found.src, { container: inspectBox, net, store, signal: abort.signal });
+      if (gone) return;
+      if (seen.error) return fail(seen.error);
+      sent = true;
+      net.send(C2S.CREATE, { name: n, password: hostPw.value, source: found.src, def: seen.meta });
+    } catch (err) {
+      console.error('hosting from a link failed', err);
+      fail(COPY.badLink('network'));
+    }
+  }
+
+  // The server refused the room (a blocked game, a description it did not like): try again.
+  const offError = net.on(S2C.ERROR, () => {
+    if (busy && sent) {
+      sent = false;
+      setBusy(false);
+    }
+  });
+
+  function hostForm() {
+    return h('form.stack.host-form', { onsubmit: (e) => { e.preventDefault(); hostFrom(findLink); } },
+      h('h2', COPY.hostTitle),
+      h('p.muted.small', COPY.hostHint),
+      h('label.field', 'Game link', hostLink),
+      h('label.field', 'Password (optional)', hostPw),
+      hostError,
+      h('div.row.wrap', hostButton, starterButton));
+  }
+
   function join(e) {
     e?.preventDefault();
     const n = getName();
@@ -52,17 +141,20 @@ export function homeScreen(net, { prefillCode = '', preferGame = '' } = {}) {
       h(`button.btn${tab === 'create' ? '.active' : ''}`, { type: 'button', onclick: () => { tab = 'create'; render(); } }, 'Create room'),
       h(`button.btn${tab === 'join' ? '.active' : ''}`, { type: 'button', onclick: () => { tab = 'join'; render(); } }, 'Join room'),
     );
-    body.replaceChildren(tab === 'create' && games.length === 0
-      ? h('p.subtitle', 'No games yet. Make one with npm run new-game -- my-game, then restart the server.')
-      : tab === 'create'
-      ? h('form.stack', { onsubmit: create },
-        h('label.field', 'Game', game),
-        h('label.field', 'Password (optional)', createPw),
-        h('button.btn.primary.big', { type: 'submit' }, 'Create room'))
-      : h('form.stack', { onsubmit: join },
+    body.replaceChildren(...(tab === 'create'
+      ? [
+        games.length === 0
+          ? h('p.subtitle', COPY.noGamesYet)
+          : h('form.stack', { onsubmit: create },
+            h('label.field', 'Game', game),
+            h('label.field', 'Password (optional)', createPw),
+            h('button.btn.primary.big', { type: 'submit' }, 'Create room')),
+        hostForm(),
+      ]
+      : [h('form.stack', { onsubmit: join },
         h('label.field', 'Room code', code),
         h('label.field', 'Password', joinPw),
-        h('button.btn.primary.big', { type: 'submit' }, 'Join room')));
+        h('button.btn.primary.big', { type: 'submit' }, 'Join room'))]));
   }
   render();
 
@@ -73,8 +165,19 @@ export function homeScreen(net, { prefillCode = '', preferGame = '' } = {}) {
       h('label.field', 'Name', name),
       h('div.spacer'),
       tabs,
-      body)));
+      body)),
+    inspectBox);
 
-  setTimeout(() => (name.value ? (tab === 'join' ? code : name) : name).focus());
-  return { el, destroy() {} };
+  setTimeout(() => {
+    if (prefillHost) hostLink.focus();
+    else (name.value ? (tab === 'join' ? code : name) : name).focus();
+  });
+  return {
+    el,
+    destroy() {
+      gone = true;
+      offError();
+      abort.abort(); // takes down the first-look screen and the hidden frame, if they are up
+    },
+  };
 }

@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { parseRef, formatRef, refBase, repoKey, parseGithubUrl } from '../shared/gameref.js';
 import { COPY } from '../shared/copy.js';
 import { ERRORS } from '../shared/protocol.js';
+import { resolveCommit } from '../client/js/github.js';
 import { loadBlocklist } from '../server/blocklist.js';
 import { loadConfig } from '../server/config.js';
 import { KIT_VERSION } from '../server/kit/index.js';
@@ -229,4 +230,45 @@ test('errors take their text from the copy', () => {
 
 test('the kit has a version', () => {
   assert.equal(KIT_VERSION, 1);
+});
+
+// ---- the host form's commit resolver, with a stubbed fetch ----
+
+const API = 'https://api.github.com';
+const stubFetch = (reply) => {
+  const calls = [];
+  const fn = async (url, init) => {
+    calls.push({ url, init });
+    if (reply instanceof Error) throw reply;
+    return { ok: reply.status >= 200 && reply.status < 300, status: reply.status, text: async () => reply.body ?? '' };
+  };
+  fn.calls = calls;
+  return fn;
+};
+
+test('resolveCommit returns a pasted commit without asking GitHub', async () => {
+  const fetch = stubFetch({ status: 500 });
+  assert.deepEqual(await resolveCommit({ user: 'a', repo: 'b', rev: SHA }, { api: API, fetch }), { commit: SHA });
+  assert.equal(fetch.calls.length, 0);
+});
+
+test('resolveCommit reads the commit for a branch', async () => {
+  const fetch = stubFetch({ status: 200, body: `${SHA}
+` });
+  assert.deepEqual(await resolveCommit({ user: 'a', repo: 'b', rev: 'feature/x' }, { api: API, fetch }), { commit: SHA });
+  assert.equal(fetch.calls.length, 1);
+  assert.ok(fetch.calls[0].url.startsWith(`${API}/repos/a/b/commits/`));
+  assert.ok(fetch.calls[0].url.endsWith('/commits/feature%2Fx'));
+  assert.equal(fetch.calls[0].init.headers.Accept, 'application/vnd.github.sha');
+});
+
+test('resolveCommit explains failures', async () => {
+  const ask = (reply) => resolveCommit({ user: 'a', repo: 'b', rev: 'main' }, { api: API, fetch: stubFetch(reply) });
+  assert.deepEqual(await ask({ status: 404 }), { error: 'not_found' });
+  assert.deepEqual(await ask({ status: 422 }), { error: 'not_found' });
+  assert.deepEqual(await ask({ status: 403 }), { error: 'rate_limited' });
+  assert.deepEqual(await ask({ status: 429 }), { error: 'rate_limited' });
+  assert.deepEqual(await ask(new TypeError('Failed to fetch')), { error: 'network' });
+  assert.deepEqual(await ask({ status: 502 }), { error: 'network' });
+  assert.deepEqual(await ask({ status: 200, body: '<html>captive portal</html>' }), { error: 'network' }, 'a body that is not a commit');
 });

@@ -57,6 +57,13 @@ input.code { text-transform: uppercase; letter-spacing: 3px; font-weight: 700; }
 .badge.off { color: var(--danger); }
 
 /* ---------- home ---------- */
+.host-form { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 4px; }
+.host-form h2 { font-size: 15px; margin: 0; }
+.host-form p { margin: 0; }
+.form-error { color: var(--danger); font-size: 14px; line-height: 1.4; margin: 0; }
+.form-error:empty { display: none; }
+.inspect-host { position: fixed; left: 0; top: 0; width: 0; height: 0; overflow: hidden; visibility: hidden; }
+
 .home { width: min(460px, 100%); }
 .home .panel { padding: 24px; }
 
