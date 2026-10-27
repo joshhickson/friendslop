@@ -49,10 +49,12 @@ export const S2C = Object.freeze({
   RELAY_IN: 'relay:in',      // { from, type, data } a player's game message
   // { ev, ...fields }, with ev one of
   //   'start'    { matchId, settings, game: { id }, startedAt }
-  //   'join'     { id, spectator, virtual, options }
-  //   'leave'    { id }
-  //   'team'     { id, oldTeam }
-  //   'spectate' { id, spectating }
+  //   'join'     { id, spectator, virtual, options, player }
+  //   'leave'    { id, player }
+  //   'team'     { id, oldTeam, player }
+  //   'spectate' { id, spectating, player }
+  // where player is { id, name, team, bot, spectating, connected } as the server has it when
+  // the event is sent (so after a disconnect, a leave says connected: false).
   //   'results'  { result }
   //   'end'      {}
   RELAY_EVENT: 'relay:event',

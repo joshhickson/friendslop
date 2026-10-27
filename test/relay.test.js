@@ -87,6 +87,8 @@ test('the runner hears the match start and each player who loads', async () => {
   for (const j of joins) {
     assert.equal(j.spectator, false);
     assert.equal(j.virtual, false);
+    // The player as the server has it, so the runner needs no snapshot to know who joined.
+    assert.deepEqual(j.player, { id: j.id, name: j.id === s.hostId ? 'Host' : 'Guest', team: null, bot: false, spectating: false, connected: true });
   }
   assert.ok(!s.guest.messages.some((m) => m.t.startsWith('relay')), 'only the runner hears relay events');
 });
@@ -258,15 +260,33 @@ test('the runner hears team changes, spectating, leaving and the end', async () 
   const newTeam = oldTeam === 'red' ? 'blue' : 'red';
   await play(s);
   s.guest.send('team:pick', { team: newTeam });
-  assert.deepEqual((({ id, oldTeam: o }) => ({ id, o }))(await s.host.next(isEvent('team'))), { id: s.guestId, o: oldTeam });
+  const team = await s.host.next(isEvent('team'));
+  assert.deepEqual({ id: team.id, o: team.oldTeam }, { id: s.guestId, o: oldTeam });
+  assert.deepEqual(team.player, { id: s.guestId, name: 'Guest', team: newTeam, bot: false, spectating: false, connected: true });
   s.guest.send('team:pick', { team: 'spectate' });
-  assert.equal((await s.host.next(isEvent('spectate'))).spectating, true);
+  const watching = await s.host.next(isEvent('spectate'));
+  assert.equal(watching.spectating, true);
+  assert.deepEqual({ team: watching.player.team, spectating: watching.player.spectating }, { team: null, spectating: true });
   s.guest.send('team:pick', { team: newTeam });
-  assert.equal((await s.host.next(isEvent('spectate'))).spectating, false);
+  const back = await s.host.next(isEvent('spectate'));
+  assert.equal(back.spectating, false);
+  assert.deepEqual({ team: back.player.team, spectating: back.player.spectating }, { team: newTeam, spectating: false });
   s.guest.send('room:leave');
-  assert.equal((await s.host.next(isEvent('leave'))).id, s.guestId);
+  const leave = await s.host.next(isEvent('leave'));
+  assert.equal(leave.id, s.guestId);
+  assert.equal(leave.player.id, s.guestId);
+  assert.equal(leave.player.name, 'Guest');
   s.host.send('room:end');
   await s.host.next(isEvent('end'));
+});
+
+test('a player whose socket drops leaves with connected: false', async () => {
+  const s = await setup();
+  await play(s);
+  s.guest.close();
+  const leave = await s.host.next(isEvent('leave'));
+  assert.equal(leave.id, s.guestId);
+  assert.equal(leave.player.connected, false);
 });
 
 test('a runner sending 200 relays a second for 2 s is not dropped or disconnected', async () => {

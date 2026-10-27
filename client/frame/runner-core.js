@@ -16,11 +16,6 @@ const MAX_DT = 0.25; // seconds: the same cap as Match's tick
 const STAT_KEY_RE = /^[A-Za-z0-9_]{1,32}$/;
 const STAT_TEXT_MAX = 64;
 const STAT_KEYS_MAX = 32;
-// Events that change what the room snapshot says about a player (who they are, their team,
-// whether they spectate). Each one waits for the snapshot that follows it, so the game sees the
-// player as the server does. The server always sends one within ~50 ms; this is the fallback.
-const SNAPSHOT_WAIT_MS = 250;
-const NEEDS_SNAPSHOT = new Set(['join', 'team', 'spectate']);
 
 const SILENT = Object.freeze({ debug() {}, info() {}, warn() {}, error() {} });
 
@@ -63,6 +58,8 @@ class Emitter {
   }
 }
 
+const isPlain = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+
 /**
  * @param {object} opts
  * @param {object} opts.def        the game's defineGame() output (with create)
@@ -79,53 +76,62 @@ export function createRunner({ def, transport, loadBrain = async () => null, tim
     clearInterval: (h) => globalThis.clearInterval(h),
   };
 
-  // ---- what the server last told us about the room ----
+  // ---- what the server last told us about the room's players ----
   let snapshot = null;
-  let byId = new Map(); // playerId -> the snapshot's entry
+  // playerId -> { id, name, team, bot, spectating, connected, ping, ... }: the latest snapshot's
+  // entry, patched by the `player` fields of each event that arrived after it.
+  let byId = new Map();
 
-  // ---- the running match (reset by each `start`) ----
-  let m = null;
+  let m = null; // the running match (a fresh object for each `start`)
   let stopped = false;
-  let brainPromise = null;
-
-  // Events and messages wait here, in order, while one of them waits for a fresh snapshot.
-  const held = [];
-  let waiting = false;
-  let waitStart = 0;
+  let brainModule = null; // the bot module, once it has loaded; a failed load is tried again next match
 
   // ---- relay output ----
   let queue = []; // { item, json? } items for the next flush
-  let deliveries = []; // [botId, type, json] for bots this runner runs
+  let deliveries = []; // [match, botId, type, json] for bots this runner runs
   let flushScheduled = false;
 
-  function viewFor(id) {
-    let v = m.views.get(id);
+  // ---- players, as one match sees them ----
+
+  /** What `match` knows of a player now: the room's latest, or the last it saw (gone, so not connected). */
+  function fieldsOf(match, id) {
+    const cur = m === match ? byId.get(id) : undefined;
+    if (cur) return cur;
+    const last = match.last.get(id);
+    return last ? { ...last, connected: false } : null;
+  }
+
+  function viewFor(match, id) {
+    let v = match.views.get(id);
     if (v) return v;
-    const entry = () => byId.get(id);
     v = Object.freeze({
       get id() { return id; },
-      get name() { return entry()?.name ?? ''; },
-      get team() { return entry()?.team ?? null; },
-      get ping() { return entry()?.ping ?? 0; },
-      get connected() { return entry()?.connected ?? m?.known.has(id) ?? false; },
-      get bot() { return entry()?.bot ?? m?.known.get(id)?.virtual ?? false; },
+      get name() { return fieldsOf(match, id)?.name ?? ''; },
+      get team() { return fieldsOf(match, id)?.team ?? null; },
+      get ping() { return fieldsOf(match, id)?.ping ?? 0; },
+      get connected() { return fieldsOf(match, id)?.connected ?? false; },
+      get bot() { return fieldsOf(match, id)?.bot ?? false; },
       get spectating() {
-        if (m?.active.has(id)) return false;
-        if (m?.watchers.has(id)) return true;
-        return entry()?.spectating ?? false;
+        if (match.active.has(id)) return false;
+        if (match.watchers.has(id)) return true;
+        return fieldsOf(match, id)?.spectating ?? false;
       },
-      get stats() { return { ...(m?.stats.get(id) ?? {}) }; },
+      get stats() { return { ...(match.stats.get(id) ?? {}) }; },
     });
-    m.views.set(id, v);
+    match.views.set(id, v);
     return v;
   }
 
+  /** An event's `player` is the server's word on that player as of the event: it goes in first. */
+  function applyPlayer(msg) {
+    const p = msg.player;
+    if (!isPlain(p) || p.id !== msg.id) return;
+    const merged = { ...byId.get(p.id), ...p };
+    byId.set(p.id, merged);
+    m.last.set(p.id, merged);
+  }
+
   const idOf = (target) => (typeof target === 'string' ? target : target?.id);
-  /** A player the runner knows of, as ctx's `resolve` finds any player in the room. */
-  const resolve = (target) => {
-    const id = idOf(target);
-    return typeof id === 'string' && (byId.has(id) || m.known.has(id)) ? id : null;
-  };
 
   // ---- hooks ----
 
@@ -148,14 +154,14 @@ export function createRunner({ def, transport, loadBrain = async () => null, tim
   /** The game broke: end the match with its message, and run none of its code again. */
   function crash(err) {
     if (m.halted) return;
-    halt();
+    halt(m);
     push({ k: 'ctx', op: 'endMatch', args: [{ text: COPY.gameCrashed(errText(err)), error: true }, {}] });
   }
 
-  function halt() {
-    m.halted = true;
-    if (m.interval !== null) tm.clearInterval(m.interval);
-    m.interval = null;
+  function halt(match) {
+    match.halted = true;
+    if (match.interval !== null) tm.clearInterval(match.interval);
+    match.interval = null;
   }
 
   // ---- output ----
@@ -167,8 +173,8 @@ export function createRunner({ def, transport, loadBrain = async () => null, tim
     queueMicrotask(flush);
   }
 
-  function deliverLocal(botId, type, json) {
-    if (m.brains.has(botId)) deliveries.push([botId, type, json]);
+  function deliverLocal(match, botId, type, json) {
+    if (match.brains.has(botId)) deliveries.push([match, botId, type, json]);
   }
 
   function flush() {
@@ -177,23 +183,23 @@ export function createRunner({ def, transport, loadBrain = async () => null, tim
     const local = deliveries;
     queue = [];
     deliveries = [];
-    if (items.length === 0 || stopped) return;
+    if (items.length === 0 || stopped || !m) return;
     const msgs = items.map(({ item, json }) => (json === undefined ? item : { ...item, data: wireCopy(json) }));
     const msg = { t: C2S.RELAY, msgs };
     const tooMany = msgs.length > LIMITS.MAX_RELAY_MSGS;
     if (tooMany || utf8Bytes(JSON.stringify(msg), LIMITS.MAX_RELAY_BYTES) > LIMITS.MAX_RELAY_BYTES) {
       // Sent, this would close the socket or be refused whole. End the match instead, once.
-      if (m && !m.chatty) {
+      if (!m.chatty) {
         m.chatty = true;
-        if (!m.halted) halt();
+        if (!m.halted) halt(m);
         log.warn?.(`dropped a relay of ${msgs.length} items that was over the limit; ending the match`);
         transport.send({ t: C2S.RELAY, msgs: [{ k: 'ctx', op: 'endMatch', args: [{ text: COPY.gameTooChatty, error: true }, {}] }] });
       }
       return;
     }
     transport.send(msg);
-    for (const [botId, type, json] of local) {
-      const slot = m?.brains.get(botId);
+    for (const [match, botId, type, json] of local) {
+      const slot = m === match ? match.brains.get(botId) : null;
       if (!slot) continue;
       // A brain still loading gets these once it has mounted, as a socket bot would have.
       if (slot.mounted) slot.events.emit(type, wireCopy(json));
@@ -206,8 +212,19 @@ export function createRunner({ def, transport, loadBrain = async () => null, tim
 
   // ---- ctx ----
 
-  function makeContext(start) {
+  /**
+   * The ctx for one match. It is bound to that match: once the match is over, every call on it
+   * does nothing, and reads give empty or zero values, as a stale ctx from server/match.js does.
+   */
+  function makeContext(match, start) {
     const startedLocal = clock();
+    const live = () => m === match && !stopped; // reads still work in onEnd
+    const writable = () => live() && !match.halted;
+    const resolve = (target) => {
+      const id = idOf(target);
+      return typeof id === 'string' && (byId.has(id) || match.known.has(id)) ? id : null;
+    };
+
     const ctx = {
       matchId: start.matchId,
       game: { id: def.id, name: def.name },
@@ -220,41 +237,41 @@ export function createRunner({ def, transport, loadBrain = async () => null, tim
       /** The server's wall clock in ms, as of the match start plus the time run since. */
       now: () => (typeof start.startedAt === 'number' ? start.startedAt : Date.now()) + (clock() - startedLocal),
 
-      players: () => [...m.active].map(viewFor),
-      getPlayer: (id) => (m.active.has(id) ? viewFor(id) : null),
+      players: () => (live() ? [...match.active].map((id) => viewFor(match, id)) : []),
+      getPlayer: (id) => (live() && match.active.has(id) ? viewFor(match, id) : null),
       teamPlayers: (team) => ctx.players().filter((p) => p.team === team),
-      spectators: () => [...m.watchers].map(viewFor),
+      spectators: () => (live() ? [...match.watchers].map((id) => viewFor(match, id)) : []),
 
       send(target, type, data) {
         const id = idOf(target);
-        if (m.halted || typeof id !== 'string' || !(m.active.has(id) || m.watchers.has(id))) return;
+        if (!writable() || typeof id !== 'string' || !(match.active.has(id) || match.watchers.has(id))) return;
         const json = encode(data);
         push({ k: 'out', to: 'player', id, type }, json);
-        deliverLocal(id, type, json);
+        deliverLocal(match, id, type, json);
       },
       broadcast(type, data, { except } = {}) {
-        if (m.halted) return;
+        if (!writable()) return;
         const skip = except ? idOf(except) ?? null : null;
         const json = encode(data);
         push(skip ? { k: 'out', to: 'all', except: skip, type } : { k: 'out', to: 'all', type }, json);
-        for (const id of [...m.active, ...m.watchers]) if (id !== skip) deliverLocal(id, type, json);
+        for (const id of [...match.active, ...match.watchers]) if (id !== skip) deliverLocal(match, id, type, json);
       },
       sendTeam(team, type, data) {
-        if (m.halted) return;
+        if (!writable()) return;
         const json = encode(data);
         push({ k: 'out', to: 'team', team, type }, json);
-        for (const id of m.active) if (viewFor(id).team === team) deliverLocal(id, type, json);
+        for (const id of match.active) if (viewFor(match, id).team === team) deliverLocal(match, id, type, json);
       },
 
-      teamScore: (team) => m.teamScores[team] ?? 0,
+      teamScore: (team) => (live() ? match.teamScores[team] ?? 0 : 0),
       setTeamScore(team, value) {
-        if (!Object.hasOwn(m.teamScores, team)) return;
+        if (!writable() || !Object.hasOwn(match.teamScores, team)) return;
         if (typeof value !== 'number' || !Number.isFinite(value)) {
           log.warn?.(`setTeamScore(${team}) needs a finite number; ignored`);
           return;
         }
-        m.teamScores[team] = value;
-        if (!m.halted) push({ k: 'ctx', op: 'setTeamScore', args: [team, value] });
+        match.teamScores[team] = value;
+        push({ k: 'ctx', op: 'setTeamScore', args: [team, value] });
       },
       addTeamScore(team, delta = 1) {
         ctx.setTeamScore(team, ctx.teamScore(team) + delta);
@@ -262,11 +279,11 @@ export function createRunner({ def, transport, loadBrain = async () => null, tim
       },
 
       stat: (target, key) => {
-        const id = resolve(target);
-        return id ? m.stats.get(id)?.[key] ?? 0 : 0;
+        const id = live() ? resolve(target) : null;
+        return id ? match.stats.get(id)?.[key] ?? 0 : 0;
       },
       setStat(target, key, value) {
-        const id = resolve(target);
+        const id = writable() ? resolve(target) : null;
         if (!id) return;
         if (typeof key !== 'string' || !STAT_KEY_RE.test(key)) {
           log.warn?.(`stat key "${String(key).slice(0, 40)}" must be 1 to 32 letters, digits or underscores; ignored`);
@@ -277,39 +294,39 @@ export function createRunner({ def, transport, loadBrain = async () => null, tim
           log.warn?.(`stat "${key}" must be a finite number or text of at most ${STAT_TEXT_MAX} characters; ignored`);
           return;
         }
-        let stats = m.stats.get(id);
-        if (!stats) m.stats.set(id, (stats = {}));
+        let stats = match.stats.get(id);
+        if (!stats) match.stats.set(id, (stats = {}));
         if (!Object.hasOwn(stats, key) && Object.keys(stats).length >= STAT_KEYS_MAX) {
           log.warn?.(`a player holds at most ${STAT_KEYS_MAX} stats; "${key}" ignored`);
           return;
         }
         stats[key] = value;
-        if (!m.halted) push({ k: 'ctx', op: 'setStat', args: [id, key, value] });
+        push({ k: 'ctx', op: 'setStat', args: [id, key, value] });
       },
       addStat(target, key, delta = 1) {
-        const id = resolve(target);
+        const id = live() ? resolve(target) : null;
         if (!id) return 0;
-        ctx.setStat(id, key, (m.stats.get(id)?.[key] ?? 0) + delta);
+        ctx.setStat(id, key, (match.stats.get(id)?.[key] ?? 0) + delta);
         return ctx.stat(id, key);
       },
 
       /** Asks the server to move a player; the game hears it as onTeamChange once it lands. */
       setTeam(target, team) {
-        const id = resolve(target);
-        if (id && !m.halted) push({ k: 'ctx', op: 'setTeam', args: [id, team] });
+        const id = writable() ? resolve(target) : null;
+        if (id) push({ k: 'ctx', op: 'setTeam', args: [id, team] });
       },
 
       announce(text) {
-        if (!m.halted) push({ k: 'ctx', op: 'announce', args: [String(text)] });
+        if (writable()) push({ k: 'ctx', op: 'announce', args: [String(text)] });
       },
 
       endMatch(result = {}, opts = {}) {
-        if (!m.halted) push({ k: 'ctx', op: 'endMatch', args: [result ?? {}, opts ?? {}] });
+        if (writable()) push({ k: 'ctx', op: 'endMatch', args: [result ?? {}, opts ?? {}] });
       },
 
       /** 'playing', 'results' while a results period runs, then 'ended'. */
       get phase() {
-        return m && m.ctx === ctx ? m.phase : 'ended';
+        return m === match ? match.phase : 'ended';
       },
     };
     return ctx;
@@ -317,32 +334,47 @@ export function createRunner({ def, transport, loadBrain = async () => null, tim
 
   // ---- bots this runner runs ----
 
-  function botApi(id, options, events) {
+  function botApi(match, id, options, slot) {
     return {
       get me() { return id; },
       get room() { return snapshot; },
-      get settings() { return m?.ctx.settings ?? snapshot?.settings ?? {}; },
+      get settings() { return match.ctx.settings; },
       get teams() { return snapshot?.game?.teams ?? null; },
       options: { ...(options ?? {}) },
-      player: (pid = id) => byId.get(pid) ?? null,
+      player: (pid = id) => (m === match ? byId.get(pid) ?? null : null),
       players: () => snapshot?.players ?? [],
       team: (tid) => snapshot?.game?.teams?.find((t) => t.id === tid) ?? null,
-      teamScore: (tid) => m?.teamScores[tid] ?? snapshot?.teamScores?.[tid] ?? 0,
+      teamScore: (tid) => match.teamScores[tid] ?? 0,
       // What a bot sends reaches the game as if it had come over the wire: a moment later.
       send: (type, data) => {
         const json = encode(data);
-        const match = m;
         queueMicrotask(() => {
-          if (m === match && m.brains.get(id)?.events === events && m.active.has(id)) call('onMessage', viewFor(id), type, wireCopy(json));
+          if (m === match && match.brains.get(id) === slot && match.active.has(id)) call('onMessage', viewFor(match, id), type, wireCopy(json));
         });
       },
-      on: (type, fn) => events.on(type, fn),
-      onRoom: (fn) => events.on('$room', fn),
-      serverNow: () => m?.ctx.now() ?? Date.now(),
+      on: (type, fn) => slot.events.on(type, fn),
+      onRoom: (fn) => slot.events.on('$room', fn),
+      serverNow: () => match.ctx.now(),
       rtt: () => 0,
       chat: () => {},
       log,
     };
+  }
+
+  /** The bot module for this match: loaded once, and a failed load is tried again next match. */
+  function brainFor(match) {
+    match.brainPromise ??= brainModule
+      ? Promise.resolve(brainModule)
+      : Promise.resolve()
+        .then(() => loadBrain(def.id))
+        .then((brain) => {
+          if (brain && typeof brain.mount === 'function') brainModule = brain;
+          return brain;
+        }, (err) => {
+          log.error?.('loading the bot failed:', err);
+          return null;
+        });
+    return match.brainPromise;
   }
 
   /** Holds the bot's place at once, so what the game sends it on join is kept for it. */
@@ -354,25 +386,20 @@ export function createRunner({ def, transport, loadBrain = async () => null, tim
 
   async function mountBot(id, slot, options) {
     const match = m;
-    const { events } = slot;
-    brainPromise ??= Promise.resolve().then(() => loadBrain(def.id)).catch((err) => {
-      log.error?.('loading the bot failed:', err);
-      return null;
-    });
-    const brain = await brainPromise;
+    const brain = await brainFor(match);
     if (match.brains.get(id) !== slot) return;
     if (!brain || typeof brain.mount !== 'function') {
       slot.pending = null; // no brain: the bot stands still, and nothing piles up for it
       return;
     }
     try {
-      const instance = (await brain.mount(botApi(id, options, events))) ?? {};
+      const instance = (await brain.mount(botApi(match, id, options, slot))) ?? {};
       if (match.brains.get(id) !== slot) return destroyInstance(instance);
       slot.instance = instance;
       slot.mounted = true;
       const pending = slot.pending;
       slot.pending = [];
-      for (const [type, json] of pending) events.emit(type, wireCopy(json));
+      for (const [type, json] of pending) slot.events.emit(type, wireCopy(json));
     } catch (err) {
       slot.pending = null;
       log.error?.('bot mount() failed:', err);
@@ -398,17 +425,19 @@ export function createRunner({ def, transport, loadBrain = async () => null, tim
 
   function begin(ev) {
     if (m) end();
-    m = {
+    const match = {
       ctx: null,
       hooks: {},
       phase: 'playing',
       active: new Set(),
       watchers: new Set(),
-      known: new Map(), // playerId -> { virtual } from its join, for players the snapshot has not shown yet
+      known: new Set(), // ids that joined and have not left
+      last: new Map(), // playerId -> the last fields seen for them, kept after they leave
       views: new Map(),
       stats: new Map(),
       teamScores: Object.fromEntries((def.teams ?? []).map((t) => [t.id, 0])),
       brains: new Map(),
+      brainPromise: null,
       errors: 0,
       halted: false,
       chatty: false,
@@ -417,20 +446,20 @@ export function createRunner({ def, transport, loadBrain = async () => null, tim
       time: 0,
       ticks: 0,
     };
-    m.ctx = makeContext(ev);
+    m = match;
+    match.ctx = makeContext(match, ev);
     try {
-      m.hooks = def.create(m.ctx) ?? {};
+      match.hooks = def.create(match.ctx) ?? {};
     } catch (err) {
       log.error?.('create() threw:', err);
       crash(err);
       return;
     }
-    m.lastTick = clock();
-    m.interval = tm.setInterval(tick, 1000 / def.tickRate);
+    match.lastTick = clock();
+    match.interval = tm.setInterval(tick, 1000 / def.tickRate);
   }
 
   function tick() {
-    if (waiting && clock() - waitStart > SNAPSHOT_WAIT_MS) release();
     if (!m || m.halted) return;
     const t = clock();
     const dt = Math.min(MAX_DT, (t - m.lastTick) / 1000);
@@ -445,7 +474,7 @@ export function createRunner({ def, transport, loadBrain = async () => null, tim
 
   function end() {
     if (!m) return;
-    halt();
+    halt(m);
     m.phase = 'ended';
     // onEnd is cleanup, so it runs even for a game that was halted. The server has closed the
     // match, so nothing it sends now (or still waiting in the queue) would be taken.
@@ -460,46 +489,54 @@ export function createRunner({ def, transport, loadBrain = async () => null, tim
     for (const id of [...m.brains.keys()]) unmountBot(id);
     m.active.clear();
     m.watchers.clear();
+    m.known.clear();
     queue = [];
     deliveries = [];
     m = null;
   }
 
-  function join({ id, spectator, virtual, options }) {
+  function join(msg) {
+    const { id, spectator, virtual, options } = msg;
     if (typeof id !== 'string' || m.active.has(id) || m.watchers.has(id)) return;
-    m.known.set(id, { virtual: virtual === true });
+    applyPlayer(msg);
+    m.known.add(id);
     const slot = virtual === true && !m.halted ? addBotSlot(id) : null;
     if (spectator) {
       m.watchers.add(id);
-      call('onSpectatorJoin', viewFor(id));
+      call('onSpectatorJoin', viewFor(m, id));
     } else {
       m.active.add(id);
-      call('onPlayerJoin', viewFor(id));
+      call('onPlayerJoin', viewFor(m, id));
     }
     if (slot) mountBot(id, slot, options);
   }
 
-  function leave({ id }) {
+  function leave(msg) {
+    const { id } = msg;
+    applyPlayer(msg);
     unmountBot(id);
+    m.known.delete(id);
     if (m.watchers.delete(id)) return;
     if (!m.active.delete(id)) return;
-    call('onPlayerLeave', viewFor(id));
+    call('onPlayerLeave', viewFor(m, id));
   }
 
-  function spectate({ id, spectating }) {
+  function spectate(msg) {
+    const { id, spectating } = msg;
+    applyPlayer(msg);
     if (spectating && m.active.delete(id)) {
-      call('onPlayerLeave', viewFor(id));
+      call('onPlayerLeave', viewFor(m, id));
       m.watchers.add(id);
-      call('onSpectatorJoin', viewFor(id));
+      call('onSpectatorJoin', viewFor(m, id));
     } else if (!spectating && m.watchers.delete(id)) {
       m.active.add(id);
-      call('onPlayerJoin', viewFor(id));
+      call('onPlayerJoin', viewFor(m, id));
     }
   }
 
   function dispatch(msg) {
     if (msg.t === S2C.RELAY_IN) {
-      if (m && m.active.has(msg.from)) call('onMessage', viewFor(msg.from), msg.type, msg.data);
+      if (m && m.active.has(msg.from)) call('onMessage', viewFor(m, msg.from), msg.type, msg.data);
       return;
     }
     const ev = msg.ev;
@@ -509,7 +546,8 @@ export function createRunner({ def, transport, loadBrain = async () => null, tim
       case 'join': return join(msg);
       case 'leave': return leave(msg);
       case 'team':
-        if (m.active.has(msg.id)) call('onTeamChange', viewFor(msg.id), msg.oldTeam ?? null);
+        applyPlayer(msg);
+        if (m.active.has(msg.id)) call('onTeamChange', viewFor(m, msg.id), msg.oldTeam ?? null);
         return;
       case 'spectate': return spectate(msg);
       case 'results':
@@ -521,34 +559,13 @@ export function createRunner({ def, transport, loadBrain = async () => null, tim
     }
   }
 
-  function drain() {
-    while (held.length && !waiting) {
-      const msg = held[0];
-      if (msg.t === S2C.RELAY_EVENT && NEEDS_SNAPSHOT.has(msg.ev) && m) {
-        waiting = true;
-        waitStart = clock();
-        return;
-      }
-      held.shift();
-      dispatch(msg);
-    }
-  }
-
-  /** The snapshot the held event waited for is here (or the wait timed out): run it, then the rest. */
-  function release() {
-    if (!waiting) return;
-    waiting = false;
-    const msg = held.shift();
-    if (msg) dispatch(msg);
-    drain();
-  }
-
   function setSnapshot(room) {
     if (!room || !Array.isArray(room.players)) return;
     snapshot = room;
     byId = new Map(room.players.map((p) => [p.id, p]));
-    release();
-    if (m) for (const slot of m.brains.values()) slot.events.emit('$room', room);
+    if (!m) return;
+    for (const p of room.players) m.last.set(p.id, p);
+    for (const slot of m.brains.values()) slot.events.emit('$room', room);
   }
 
   return {
@@ -556,10 +573,7 @@ export function createRunner({ def, transport, loadBrain = async () => null, tim
     receive(msg) {
       if (stopped || !msg || typeof msg !== 'object') return;
       if (msg.t === S2C.ROOM || msg.t === S2C.WELCOME) return setSnapshot(msg.room);
-      if (msg.t !== S2C.RELAY_EVENT && msg.t !== S2C.RELAY_IN) return;
-      if (waiting && clock() - waitStart > SNAPSHOT_WAIT_MS) release();
-      held.push(msg);
-      drain();
+      if (msg.t === S2C.RELAY_EVENT || msg.t === S2C.RELAY_IN) dispatch(msg);
     },
     /** Ends any running match here (onEnd, bots destroyed) and ignores everything after. */
     stop() {

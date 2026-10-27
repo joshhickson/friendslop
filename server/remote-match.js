@@ -20,6 +20,13 @@ const RELAY_DROPS_MAX = 200; // relays the runner's connection may drop in one m
 
 const isPlain = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
+/**
+ * What a player event tells the runner about the player, as the server has it when the event
+ * is sent. The runner's views read these, so a hook sees the new team (or connected: false)
+ * without waiting for the next room snapshot.
+ */
+const fieldsOf = (p) => ({ id: p.id, name: p.name, team: p.team, bot: p.bot, spectating: p.spectating, connected: p.connected });
+
 export class RemoteMatch {
   /**
    * @param {import('./room.js').Room} room
@@ -69,13 +76,13 @@ export class RemoteMatch {
     if (this.ended || this.active.has(player.id) || this.watchers.has(player.id)) return;
     (player.spectating ? this.watchers : this.active).add(player.id);
     const virtual = player.conn instanceof VirtualConn;
-    this.#event('join', { id: player.id, spectator: player.spectating, virtual, options: virtual ? { difficulty: player.difficulty ?? 'normal' } : {} });
+    this.#event('join', { id: player.id, spectator: player.spectating, virtual, options: virtual ? { difficulty: player.difficulty ?? 'normal' } : {}, player: fieldsOf(player) });
   }
 
   playerGone(player) {
     if (player.id === this.runnerId) this.runnerGone();
     if (!this.watchers.delete(player.id) && !this.active.delete(player.id)) return;
-    this.#event('leave', { id: player.id });
+    this.#event('leave', { id: player.id, player: fieldsOf(player) });
   }
 
   /** A loaded player switched between playing and spectating mid-match. */
@@ -83,16 +90,16 @@ export class RemoteMatch {
     if (!player.loaded || this.ended) return;
     if (player.spectating && this.active.delete(player.id)) {
       this.watchers.add(player.id);
-      this.#event('spectate', { id: player.id, spectating: true });
+      this.#event('spectate', { id: player.id, spectating: true, player: fieldsOf(player) });
     } else if (!player.spectating && this.watchers.delete(player.id)) {
       this.active.add(player.id);
-      this.#event('spectate', { id: player.id, spectating: false });
+      this.#event('spectate', { id: player.id, spectating: false, player: fieldsOf(player) });
     }
   }
 
   playerTeamChanged(player, oldTeam) {
     if (!this.active.has(player.id)) return;
-    this.#event('team', { id: player.id, oldTeam });
+    this.#event('team', { id: player.id, oldTeam, player: fieldsOf(player) });
   }
 
   /** A player's game message goes to the runner, the runner's own included. */

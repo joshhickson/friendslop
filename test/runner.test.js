@@ -6,7 +6,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { startServer, TestClient, FIXTURE_GAMES, relayHost, sleep } from './helpers.js';
 import { COPY } from '../shared/copy.js';
-import { describeGame } from '../client/frame/runner-core.js';
+import { describeGame, createRunner } from '../client/frame/runner-core.js';
 import { defineGame } from '../server/kit/index.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -81,9 +81,10 @@ async function until(fn, ms = 2000, what = 'condition') {
 
 let tempCount = 0;
 /** Writes a throwaway game whose create() body is `body`, and returns its folder. */
-async function tempGame(body, extra = '') {
+async function tempGame(body, extra = '', { bot = null } = {}) {
   const dir = join(tmp, `g${++tempCount}`);
   await mkdir(dir, { recursive: true });
+  if (bot) await writeFile(join(dir, 'bot.js'), bot);
   await writeFile(join(dir, 'server.js'), [
     `import { defineGame } from ${JSON.stringify(KIT_URL)};`,
     'export default defineGame({',
@@ -125,7 +126,7 @@ test('the starter runs end to end through the relay', async () => {
 test('stats and scores set by the game reach the scoreboard', async () => {
   const s = await setup(SOLO);
   await play(s);
-  await until(() => s.runner.ctx.getPlayer(s.guestId), 2000, 'the guest to join');
+  await until(() => s.runner.ctx?.getPlayer(s.guestId), 2000, 'the guest to join');
   s.runner.ctx.setStat(s.guestId, 'points', 3);
   assert.equal(s.runner.ctx.addStat(s.guestId, 'points', 4), 7);
   assert.equal(s.runner.ctx.stat(s.guestId, 'points'), 7);
@@ -137,6 +138,111 @@ test('stats and scores set by the game reach the scoreboard', async () => {
   assert.equal(end.result.winner, s.guestId);
   assert.equal(end.result.text, 'Guest wins');
   assert.equal(end.result.stats[s.guestId].points, 7);
+});
+
+test('team scores set by the game reach the scoreboard', async () => {
+  const s = await setup(DOTS);
+  await play(s);
+  const ctx = await until(() => s.runner.ctx?.getPlayer(s.guestId) && s.runner.ctx, 2000, 'the guest to join');
+  ctx.setTeamScore('red', 2);
+  assert.equal(ctx.addTeamScore('red'), 3);
+  assert.equal(ctx.addTeamScore('blue', 4), 4);
+  ctx.setTeamScore('green', 9); // no such team: ignored, as in Match
+  assert.equal(ctx.teamScore('red'), 3);
+  assert.equal(ctx.teamScore('green'), 0);
+  const r = await s.guest.roomWhere((x) => x.teamScores.red === 3 && x.teamScores.blue === 4);
+  assert.deepEqual(r.teamScores, { red: 3, blue: 4 });
+  ctx.endMatch({ winner: 'blue' });
+  const end = await s.guest.next((m) => m.t === 'match:end');
+  assert.deepEqual(end.result.teamScores, { red: 3, blue: 4 });
+  assert.equal(end.result.winner, 'blue');
+});
+
+test('a ctx kept from an ended match is inert', async () => {
+  const s = await setup(STARTER);
+  await play(s);
+  const old = await until(() => s.runner.ctx?.getPlayer(s.guestId) && s.runner.ctx, 2000, 'match 1');
+  s.host.send('room:end');
+  await s.guest.next((m) => m.t === 'match:end');
+  await until(() => s.runner.ctx === null, 2000, 'the runner to hear the end');
+  // Between matches: nothing throws, and nothing is sent.
+  old.broadcast('stale', 1);
+  old.setStat(s.guestId, 'points', 5);
+  assert.deepEqual(old.players(), []);
+  await play(s);
+  const ctx2 = await until(() => s.runner.ctx?.getPlayer(s.guestId) && s.runner.ctx, 2000, 'match 2');
+  assert.notEqual(ctx2, old);
+  old.broadcast('stale', 2);
+  old.send(s.guestId, 'stale', 3);
+  old.setStat(s.guestId, 'points', 5);
+  assert.equal(old.addStat(s.guestId, 'points', 1), 0);
+  old.setTeamScore('red', 1);
+  old.announce('stale');
+  old.endMatch({ text: 'stale' });
+  assert.deepEqual(old.players(), []);
+  assert.deepEqual(old.spectators(), []);
+  assert.equal(old.getPlayer(s.guestId), null);
+  assert.equal(old.stat(s.guestId, 'points'), 0);
+  assert.equal(old.phase, 'ended');
+  assert.equal(ctx2.stat(s.guestId, 'points'), 0);
+  // Match 2 carries on, and nothing from the old ctx reached anyone.
+  ctx2.broadcast('fresh', 1);
+  await s.guest.nextGame('fresh');
+  await sleep(100);
+  assert.ok(!s.guest.messages.some((m) => m.t === 'game' && m.type === 'stale'));
+  assert.ok(!s.guest.messages.some((m) => m.t === 'chat' && m.text === 'stale'));
+  assert.equal(s.guest.messages.filter((m) => m.t === 'match:end').length, 1);
+  const r = await s.guest.roomWhere((x) => x.phase === 'playing');
+  assert.equal(r.players.find((p) => p.id === s.guestId).stats.points, undefined);
+});
+
+test('lobby bots and the host all join within one tick of the start', async () => {
+  const dir = await tempGame(
+    "const t0 = globalThis.performance.now(); const joins = []; return { onPlayerJoin(p) { joins.push({ id: p.id, bot: p.bot, at: globalThis.performance.now() - t0 }); }, debugState() { return { joins }; } };",
+    '',
+    { bot: 'export default { mount() { return {}; } };' },
+  );
+  const s = await setup(dir, 0);
+  s.host.send('room:bots', { add: 3 });
+  await s.host.roomWhere((x) => x.players.filter((p) => p.bot).length === 3);
+  await play(s);
+  const hooks = await until(() => s.runner.hooks.debugState?.().joins.length === 4 && s.runner.hooks, 2000, 'four joins');
+  const { joins } = hooks.debugState();
+  assert.equal(joins.filter((j) => j.bot).length, 3);
+  assert.ok(joins.some((j) => j.id === s.hostId && !j.bot));
+  const last = Math.max(...joins.map((j) => j.at));
+  assert.ok(last < 50, `the last join came ${last.toFixed(1)} ms after create, over one 50 ms tick`);
+});
+
+test('a brain that fails to load is tried again next match', async () => {
+  let loads = 0;
+  const mounted = [];
+  const runner = createRunner({
+    def: { id: 'b', name: 'B', tickRate: 20, teams: null, create: () => ({}) },
+    transport: { send() {} },
+    loadBrain: async () => {
+      loads++;
+      if (loads === 1) throw new Error('network');
+      return { mount(api) { mounted.push(api.me); return {}; } };
+    },
+    log: { debug() {}, info() {}, warn() {}, error() {} },
+  });
+  const ev = (e, fields) => runner.receive({ t: 'relay:event', ev: e, ...fields });
+  const bot = (id) => ({ id, spectator: false, virtual: true, options: {}, player: { id, name: id, team: null, bot: true, spectating: false, connected: true } });
+  try {
+    ev('start', { matchId: 'm1', settings: {}, game: { id: 'b' }, startedAt: 0 });
+    ev('join', bot('p1'));
+    await sleep(20);
+    assert.deepEqual(mounted, []);
+    ev('end', {});
+    ev('start', { matchId: 'm2', settings: {}, game: { id: 'b' }, startedAt: 0 });
+    ev('join', bot('p2'));
+    await sleep(20);
+    assert.deepEqual(mounted, ['p2']);
+    assert.equal(loads, 2);
+  } finally {
+    runner.stop();
+  }
 });
 
 test('a game that throws in create ends the match with the crash message', async () => {
@@ -197,7 +303,7 @@ test('spectators are invisible to the game', async () => {
   s.guest.send('team:pick', { team: 'spectate' });
   await s.host.roomWhere((x) => x.players.find((p) => p.id === s.guestId)?.spectating);
   await play(s);
-  await until(() => s.runner.ctx.spectators().some((p) => p.id === s.guestId), 2000, 'the spectator to load');
+  await until(() => s.runner.ctx?.spectators().some((p) => p.id === s.guestId), 2000, 'the spectator to load');
   assert.ok(!s.runner.ctx.players().some((p) => p.id === s.guestId));
   assert.equal(s.runner.ctx.getPlayer(s.guestId), null);
   assert.equal(s.runner.ctx.spectators().find((p) => p.id === s.guestId).spectating, true);
