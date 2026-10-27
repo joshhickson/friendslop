@@ -12,6 +12,7 @@ import { loadGames } from './games.js';
 import { BotManager, INTERNAL_BOT_KEY } from './bots/manager.js';
 import { createLogger } from './log.js';
 import { isHostAllowed, isOriginAllowed, clientIp } from './security.js';
+import { TrafficMeter } from './traffic.js';
 import { LIMITS } from '../shared/protocol.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -94,7 +95,8 @@ export async function createGameServer(config, { log = createLogger(config.logLe
   else log.info(`games: ${[...games.keys()].join(', ')}`);
 
   const bots = new BotManager({ config, log: log.child('bots'), gamesDir: config.gamesDir });
-  const manager = new RoomManager({ config, log: log.child('rooms'), games, bots });
+  const traffic = new TrafficMeter({ dailyMb: config.dailyTrafficMb, log: log.child('traffic') });
+  const manager = new RoomManager({ config, log: log.child('rooms'), games, bots, traffic });
   const staticMounts = mounts(config.gamesDir);
 
   async function serveStatic(req, res, pathname) {
@@ -117,6 +119,7 @@ export async function createGameServer(config, { log = createLogger(config.logLe
           // Vibecoding-friendly: always revalidate so edits show up on refresh.
           'Cache-Control': pathname.startsWith('/vendor/') ? 'public, max-age=86400' : 'no-cache',
         });
+        if (req.method !== 'HEAD') traffic.add(body.length);
         res.end(req.method === 'HEAD' ? undefined : body);
         return;
       } catch {
@@ -128,6 +131,13 @@ export async function createGameServer(config, { log = createLogger(config.logLe
   }
 
   const httpServer = http.createServer(async (req, res) => {
+    // The health check answers under any Host name: hosting platforms probe it by internal
+    // address, and it only reports counts.
+    if (req.method === 'GET' && req.url === '/api/health') {
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+      res.end(JSON.stringify({ ok: true, ...manager.stats(), games: [...games.keys()], traffic: traffic.stats() }));
+      return;
+    }
     if (!isHostAllowed(req, config)) {
       res.writeHead(403, { 'Content-Type': 'text/plain' });
       res.end('Host not allowed');
@@ -151,17 +161,14 @@ export async function createGameServer(config, { log = createLogger(config.logLe
       res.end();
       return;
     }
-    if (pathname === '/api/health') {
-      res.writeHead(200, { ...securityHeaders(req), 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-      res.end(JSON.stringify({ ok: true, ...manager.stats(), games: [...games.keys()] }));
-      return;
-    }
     await serveStatic(req, res, pathname);
   });
 
   // ---- WebSocket ----
   const wss = new WebSocketServer({ noServer: true, maxPayload: LIMITS.MAX_MESSAGE_BYTES, perMessageDeflate: false });
   const perIp = new Map();
+  let players = 0; // connections other than the server's own bots
+  let proxyHeadersLogged = false;
 
   httpServer.on('upgrade', (req, socket, head) => {
     const reject = (code, text) => {
@@ -179,19 +186,30 @@ export async function createGameServer(config, { log = createLogger(config.logLe
     const count = perIp.get(ip) ?? 0;
     // The server's own bots (lobby-added or auto-filled) are exempt; they're limited by room size instead.
     const internalBot = req.headers['x-internal-bot'] === INTERNAL_BOT_KEY && /^(127\.|::1$|::ffff:127\.)/.test(req.socket.remoteAddress ?? '');
+    if (!internalBot && config.trustProxy && !proxyHeadersLogged) {
+      // Once per run, record which client-IP headers the proxy sends (names and counts, never addresses).
+      proxyHeadersLogged = true;
+      const fwd = String(req.headers['x-forwarded-for'] ?? '');
+      const others = ['forwarded', 'x-real-ip', 'true-client-ip', 'cf-connecting-ip'].filter((h) => h in req.headers);
+      log.info(`proxy headers: x-forwarded-for has ${fwd ? fwd.split(',').length : 0} entries; also sent: ${others.join(', ') || 'none'}`);
+    }
     if (count >= config.maxConnectionsPerIp && !internalBot) return reject(429, 'Too Many Requests');
+    if (players >= config.maxConnections && !internalBot) return reject(503, 'Service Unavailable');
 
     wss.handleUpgrade(req, socket, head, (ws) => {
       perIp.set(ip, (perIp.get(ip) ?? 0) + 1);
+      if (!internalBot) players++;
       ws.on('close', () => {
         const n = (perIp.get(ip) ?? 1) - 1;
         if (n <= 0) perIp.delete(ip);
         else perIp.set(ip, n);
+        if (!internalBot) players--;
       });
       ws.isAlive = true;
       ws.on('pong', () => { ws.isAlive = true; });
       // eslint-disable-next-line no-new
-      new Connection(ws, { ip, manager, log: log.child('conn'), games, defaultGame: config.defaultGame });
+      // Bot traffic stays on this machine, so only player connections count toward the budget.
+      new Connection(ws, { ip, manager, log: log.child('conn'), games, defaultGame: config.defaultGame, traffic: internalBot ? null : traffic });
     });
   });
 
@@ -214,6 +232,7 @@ export async function createGameServer(config, { log = createLogger(config.logLe
     manager,
     bots,
     games,
+    traffic,
     listen() {
       return new Promise((resolveListen, rejectListen) => {
         httpServer.once('error', rejectListen);

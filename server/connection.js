@@ -7,8 +7,9 @@ import { TokenBucket } from './security.js';
 const OPEN = 1;
 
 export class Connection {
-  constructor(ws, { ip, manager, log, games, defaultGame }) {
+  constructor(ws, { ip, manager, log, games, defaultGame, traffic = null }) {
     this.ws = ws;
+    this.traffic = traffic;
     this.ip = ip;
     this.manager = manager;
     this.log = log;
@@ -40,6 +41,8 @@ export class Connection {
     if (this.ws.readyState !== OPEN) return;
     // If a client can't keep up, drop non-essential traffic rather than buffering forever.
     if (this.ws.bufferedAmount > 1_000_000) return;
+    // String length stands in for bytes: the protocol is JSON and almost all ASCII.
+    this.traffic?.add(raw.length);
     this.ws.send(raw);
   }
 
@@ -135,6 +138,7 @@ export class Connection {
     }
 
     if (!room || !player) return this.error('not_in_room');
+    if (!player.bot) room.lastActivity = Date.now();
     const isHost = room.hostId === player.id;
     let err = null;
 

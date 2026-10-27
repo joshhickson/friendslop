@@ -4,11 +4,12 @@ import { normalizeRoomId, cleanName, LIMITS } from '../shared/protocol.js';
 
 /** Owns every room on the server and handles create / join. */
 export class RoomManager {
-  constructor({ config, log, games, bots }) {
+  constructor({ config, log, games, bots, traffic = null }) {
     this.config = config;
     this.log = log;
     this.games = games; // Map<id, def>
     this.bots = bots; // BotManager (lobby-added bots)
+    this.traffic = traffic; // TrafficMeter (daily budget)
     this.rooms = new Map();
     // Brute-force protection: limit wrong passwords per IP and per room.
     this.ipFailures = new FailureLimiter({ maxFailures: 8, windowMs: 60_000, lockMs: 60_000 });
@@ -21,11 +22,26 @@ export class RoomManager {
       this.bots?.pruneTickets();
     }, 60_000);
     this.pruneTimer.unref?.();
+    if (config.roomIdleMs > 0) {
+      this.idleTimer = setInterval(() => this.closeIdleRooms(), Math.min(60_000, Math.max(100, config.roomIdleMs / 4)));
+      this.idleTimer.unref?.();
+    }
+  }
+
+  /** Closes rooms where no human has sent anything for `roomIdleMs`. */
+  closeIdleRooms(now = Date.now()) {
+    for (const room of [...this.rooms.values()]) {
+      if (now - room.lastActivity >= this.config.roomIdleMs) {
+        this.log.info(`room ${room.id} closed: idle`);
+        room.close('idle');
+      }
+    }
   }
 
   async create(conn, msg) {
     if (!this.createLimiter.allow(conn.ip)) return { error: 'rate_limited' };
     if (this.rooms.size >= this.config.maxRooms) return { error: 'too_many_rooms' };
+    if (this.traffic?.overBudget) return { error: 'traffic_budget' };
     const name = cleanName(msg.name);
     if (!name) return { error: 'bad_request', message: 'Pick a name first.' };
     const def = this.games.get(msg.game) ?? this.games.get(this.config.defaultGame) ?? this.games.values().next().value;
@@ -118,6 +134,7 @@ export class RoomManager {
 
   shutdown() {
     clearInterval(this.pruneTimer);
+    clearInterval(this.idleTimer);
     for (const room of [...this.rooms.values()]) room.destroy();
   }
 }

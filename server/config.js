@@ -66,8 +66,18 @@ export function loadConfig(argv = process.argv.slice(2), env = process.env) {
     maxRooms: int(env.MAX_ROOMS, 100),
     maxPlayersPerRoom: int(env.MAX_PLAYERS_PER_ROOM, 20),
     maxConnectionsPerIp: int(env.MAX_CONNECTIONS_PER_IP, 32),
+    // Players connected to the whole server at once (the server's own bots don't count).
+    maxConnections: int(env.MAX_CONNECTIONS, 500),
     roomCreatesPerMinute: int(env.ROOM_CREATES_PER_MINUTE, 10),
     reconnectGraceMs: int(env.RECONNECT_GRACE_MS, 20_000),
+
+    // Settings for a public server; both are off (0) by default.
+    // Close a room when no human in it has sent anything for this long, so a forgotten tab
+    // doesn't keep a match streaming all night.
+    roomIdleMs: int(env.ROOM_IDLE_MS, 0),
+    // Megabytes the server may send to players per day (UTC). Past it, no new rooms or
+    // matches start until midnight UTC; running matches finish.
+    dailyTrafficMb: int(env.DAILY_TRAFFIC_MB, 0),
 
     logLevel: env.LOG_LEVEL ?? 'info',
   };

@@ -71,6 +71,7 @@ export class Room {
     this.dirty = false;
     this.flushTimer = null;
     this.createdAt = Date.now();
+    this.lastActivity = this.createdAt; // last message from a human (bots don't count)
     this.#setGame(def);
   }
 
@@ -421,6 +422,7 @@ export class Room {
 
   startMatch() {
     if (this.phase !== 'lobby') return 'bad_phase';
+    if (this.owner.traffic?.overBudget) return 'traffic_budget';
     // Games that fill teams with bots can start with nobody playing (e.g. a spectating host).
     if (this.participantCount < this.def.minPlayers && !this.willAutoFill) return 'not_enough_players';
     for (const t of Object.keys(this.teamScores)) this.teamScores[t] = 0;
@@ -598,6 +600,18 @@ export class Room {
       match: this.matchInfo(),
       lastResult: this.lastResult,
     };
+  }
+
+  /** Closes the room for a server reason (e.g. 'idle'): everyone is told why, then it's destroyed. */
+  close(reason) {
+    for (const p of this.players.values()) {
+      if (p.bot || !p.conn) continue;
+      const conn = p.conn;
+      p.conn = null;
+      conn.unbind();
+      conn.send(S2C.LEFT, { reason });
+    }
+    this.destroy();
   }
 
   destroy() {

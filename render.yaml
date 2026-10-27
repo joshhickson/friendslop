@@ -1,0 +1,42 @@
+# Render Blueprint: one public game server on Render's free plan.
+# In Render: New > Blueprint, pick this repo. See "Hosting it for everyone" in README.md.
+services:
+  - type: web
+    name: friendslop
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm ci
+    startCommand: node server/start.js
+    healthCheckPath: /api/health
+    domains:
+      - play.friendslop.us
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Render sends traffic to the PORT it sets; listen on every interface to receive it.
+      - key: HOST
+        value: 0.0.0.0
+      # If Render gives the service a different onrender.com name, put that name here.
+      - key: ALLOWED_HOSTS
+        value: play.friendslop.us,friendslop.onrender.com
+      # Render's proxy puts the player's address first in X-Forwarded-For.
+      - key: TRUST_PROXY
+        value: "1"
+      # The starter game until a real one ships in games/.
+      - key: GAMES_DIR
+        value: templates
+      # Public-server limits (see the config table in README.md).
+      - key: MAX_ROOMS
+        value: "20"
+      - key: ROOM_CREATES_PER_MINUTE
+        value: "3"
+      - key: MAX_CONNECTIONS_PER_IP
+        value: "8"
+      - key: MAX_CONNECTIONS
+        value: "100"
+      - key: ROOM_IDLE_MS
+        value: "1800000"
+      # About 4.5 GB a month. Raise it once Render's dashboard shows the plan's real allowance.
+      - key: DAILY_TRAFFIC_MB
+        value: "150"

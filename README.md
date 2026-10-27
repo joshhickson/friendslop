@@ -92,6 +92,25 @@ room password to your friends. It uses a Cloudflare **quick tunnel**:
 
 Anyone with the URL can reach the home screen, so give rooms a password when playing over the tunnel.
 
+### Hosting it for everyone
+
+`render.yaml` sets up one always-reachable server on [Render](https://render.com)'s free plan, so
+anyone can host a room just by visiting the site. In Render, choose **New > Blueprint** and pick this
+repo. It installs with `npm ci`, starts `node server/start.js`, and sets the public-server limits
+below. Point a CNAME for your domain at the service's `onrender.com` name and list both names in
+`ALLOWED_HOSTS`.
+
+- **The free plan sleeps** after 15 minutes without visitors. The first visitor after that waits
+  about a minute while it wakes. A restart ends every room in progress.
+- **Rate limits use the first address in `X-Forwarded-For`** (`TRUST_PROXY=1`). On its first player
+  connection the server logs which client-address headers the proxy sent, by name and count only.
+- **Free bandwidth is capped,** so `DAILY_TRAFFIC_MB` stops new rooms and matches once the day's
+  budget is used. Running matches finish, and the budget resets at midnight UTC.
+  `/api/health` shows the day's total.
+- **Forgotten tabs don't stream all night:** `ROOM_IDLE_MS` closes a room when no human in it has
+  sent anything for that long.
+- **It serves `templates/`** (the starter) until `GAMES_DIR` points at a folder with real games.
+
 ### Configuration
 
 All settings are environment variables (or `--port`, `--host`, `--open` flags).
@@ -110,7 +129,12 @@ All settings are environment variables (or `--port`, `--host`, `--open` flags).
 | `DEFAULT_GAME` | (first game) | Game preselected on the home screen |
 | `MAX_ROOMS` | `100` | |
 | `MAX_PLAYERS_PER_ROOM` | `20` | Also capped by each game's `maxPlayers` |
+| `MAX_CONNECTIONS_PER_IP` | `32` | WebSocket connections from one address |
+| `MAX_CONNECTIONS` | `500` | Player connections to the whole server (the server's own bots don't count) |
+| `ROOM_CREATES_PER_MINUTE` | `10` | Rooms one address may create per minute |
 | `RECONNECT_GRACE_MS` | `20000` | How long a dropped player keeps their seat |
+| `ROOM_IDLE_MS` | `0` (off) | Close a room when no human in it has sent anything for this long |
+| `DAILY_TRAFFIC_MB` | `0` (off) | Data the server may send to players per UTC day before it refuses new rooms and matches |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`, `silent` |
 
 ## Making games
@@ -151,6 +175,7 @@ templates/starter/ what `npm run new-game` copies
 scripts/           new-game scaffolder, standalone bot runner
 test/              node:test suites, run with `npm test`
   fixtures/games/  two tiny games that exist only for the tests
+render.yaml        one public server on Render's free plan
 ```
 
 ## Tests
@@ -162,7 +187,7 @@ npm test
 Spins up real servers on random ports and drives them with scripted WebSocket clients.
 Covers rooms, passwords, lockouts, host powers, teams, reconnects, origin checks, match endings,
 spectating and team locks, bots (adding and removing, tickets, external bots, pathfinding),
-a server with no games, and the starter template.
+a server with no games, the starter template, and the public-server limits.
 
 ## Languages
 

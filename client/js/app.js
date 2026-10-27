@@ -116,6 +116,7 @@ net.on(S2C.LEFT, ({ reason }) => {
   if (reason === 'kicked') toast('You were kicked from the room.', 'error');
   else if (reason === 'replaced') toast('This seat was taken over by another tab.', 'error');
   else if (reason === 'timeout') toast('You were disconnected for too long.', 'error');
+  else if (reason === 'idle') toast('The room closed because nobody had played for a while.', 'error');
   route();
 });
 

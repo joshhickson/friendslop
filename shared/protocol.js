@@ -78,6 +78,7 @@ export const ERRORS = Object.freeze({
   locked_out: 'Too many wrong passwords. Wait a minute and try again.',
   unknown_game: 'Unknown game.',
   too_many_rooms: 'The server has too many rooms right now.',
+  traffic_budget: 'The server has used its data for today. New games can start again after midnight UTC.',
   already_in_room: 'You are already in a room.',
   not_in_room: 'You are not in a room.',
   bad_phase: 'You cannot do that right now.',
