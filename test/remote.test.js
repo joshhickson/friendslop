@@ -7,15 +7,13 @@ import { startServer, TestClient } from './helpers.js';
 import { defineGame } from '../server/kit/defineGame.js';
 import starter from '../templates/starter/server.js';
 import dots from './fixtures/games/dots/server.js';
+import { describeGame } from '../client/frame/runner-core.js';
 
 const SOURCE = 'gh:test/friendslop@' + '0'.repeat(40) + '/templates/starter';
 
-// Stands in for what describeGame(def, { hasBot }) will produce: everything defineGame
-// returns except create, as JSON (so Infinity has become null), plus hasBot.
-function metaOf(def, hasBot = false) {
-  const { create, ...rest } = JSON.parse(JSON.stringify(def));
-  return { ...rest, hasBot };
-}
+// What the host's browser sends: everything defineGame returns except create, as JSON (so
+// Infinity has become null), plus hasBot.
+const metaOf = (def, hasBot = false) => describeGame(def, { hasBot });
 const starterMeta = () => metaOf(starter, false);
 
 let srv;

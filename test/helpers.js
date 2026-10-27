@@ -1,9 +1,11 @@
 import WebSocket from 'ws';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { access } from 'node:fs/promises';
+import { basename, dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createGameServer } from '../server/server.js';
 import { loadConfig } from '../server/config.js';
 import { createLogger } from '../server/log.js';
+import { createRunner, describeGame } from '../client/frame/runner-core.js';
 
 /** Test-only games: `dots` (two teams, has a bot) and `solo` (no teams, no bot). */
 export const FIXTURE_GAMES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'games');
@@ -23,6 +25,7 @@ export class TestClient {
     this.origin = origin;
     this.messages = [];
     this.waiters = [];
+    this.listeners = new Set();
   }
 
   connect() {
@@ -31,6 +34,7 @@ export class TestClient {
       this.ws.on('message', (raw) => {
         const msg = JSON.parse(raw.toString());
         this.messages.push(msg);
+        for (const fn of [...this.listeners]) fn(msg);
         for (const w of [...this.waiters]) {
           if (w.pred(msg)) {
             this.waiters.splice(this.waiters.indexOf(w), 1);
@@ -43,6 +47,12 @@ export class TestClient {
       this.ws.once('unexpected-response', (_req, res) => reject(new Error(`HTTP ${res.statusCode}`)));
       this.ws.once('open', () => resolve(this));
     }).then(() => this.waitFor((m) => m.t === 'hello'));
+  }
+
+  /** Calls `fn` with every message from now on. Returns a function that stops it. */
+  onMessage(fn) {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
   }
 
   send(t, data = {}) {
@@ -90,3 +100,37 @@ export class TestClient {
 }
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const QUIET = Object.freeze({ debug() {}, info() {}, warn() {}, error() {} });
+
+/**
+ * A host whose game runs through the real runner (client/frame/runner-core.js), as a browser
+ * host's would: it loads `<gameDir>/server.js` (and `bot.js`, if there is one), makes a remote
+ * room from them, and feeds the runner every room snapshot and relay message. The source is a
+ * made-up pin: the server never fetches it.
+ */
+export async function relayHost(srv, { gameDir, password = '', log = QUIET }) {
+  const def = (await import(pathToFileURL(join(gameDir, 'server.js')).href)).default;
+  const botFile = join(gameDir, 'bot.js');
+  const hasBot = await access(botFile).then(() => true, () => false);
+  const brain = hasBot ? (await import(pathToFileURL(botFile).href)).default : null;
+  const source = `gh:test/friendslop@${'0'.repeat(40)}/games/${basename(gameDir).toLowerCase()}`;
+
+  const host = new TestClient(srv.base);
+  await host.connect();
+  const runner = createRunner({
+    def,
+    transport: { send: (msg) => { if (host.ws.readyState === WebSocket.OPEN) host.ws.send(JSON.stringify(msg)); } },
+    loadBrain: async () => brain,
+    log,
+  });
+  host.onMessage((msg) => runner.receive(msg));
+  host.ws.once('close', () => runner.stop());
+  host.send('room:create', { name: 'Host', password, source, def: describeGame(def, { hasBot }) });
+  const welcome = await host.next((m) => m.t === 'welcome' || m.t === 'error');
+  if (welcome.t === 'error') {
+    host.close();
+    throw new Error(`room:create refused: ${welcome.code} ${welcome.message}`);
+  }
+  return { host, runner, roomId: welcome.room.id, hostId: welcome.you };
+}
