@@ -8,12 +8,116 @@ games/<id>/
   client/index.js    required: rendering + input (browser)
   bot.js             optional: a bot player. Its presence enables "Add bots" in the lobby.
   shared/            optional: code used by both sides (maps, constants). Use relative imports.
-  assets/            optional: served at /games/<id>/assets/...
+  assets/            optional: images, sounds, models. Load them with new URL('../assets/x.png', import.meta.url).
 ```
 
 Fastest start: `npm run new-game -- <id> "Display Name"`. This copies `templates/starter`: a room where
 everyone is a dot that walks around, plus a bot that wanders. It has no rules, so you add them.
 Folders in `games/` whose names start with `_` hold code shared between games and aren't listed as games.
+
+## Share it with a link
+
+You don't need a server, an account on anything but GitHub, or anyone's permission to get friends
+into your game.
+
+1. **Fork** the friendslop repo on GitHub, so your copy has the same layout (`server/`, `client/`,
+   `shared/`, `games/`). A game finds the kit by relative path, so it has to live in a repo shaped like this one.
+2. **Put your game in `games/<id>/`** and push it. The folder name can use lowercase letters, digits,
+   hyphens and underscores.
+3. **Paste the folder's link** into the "Host a game from GitHub" box at play.friendslop.us
+   (the box on friendslop.us sends you there), for example
+   `https://github.com/you/your-fork/tree/main/games/my-game`, and press **Host this game**.
+   You get the usual room link to send to your friends.
+
+What has to be true for the link to work:
+
+- The repo is **public**. Files load through jsDelivr, a free public CDN that serves GitHub repos.
+- No single file is over **20 MB**, and the commit is under **150 MB** in all (jsDelivr's limits).
+- The link names a folder inside `games/` or `templates/`, on a branch, a tag or a commit. A branch or
+  tag is looked up on GitHub, from the host's browser, to find its commit.
+- The fork isn't too old. If the kit changed since you forked, the room says so and tells you to update.
+
+The link is pinned to the commit the branch points at when you paste it, so the host and every friend
+run identical code. **Push a fix, then paste the link again** to play the new version.
+
+**Trying it before you push.** Start the server with the dev CDN, which serves this checkout's own
+files the way jsDelivr would:
+
+```sh
+DEV_CDN=1 npm start
+```
+
+On Windows PowerShell, use `$env:DEV_CDN = "1"; npm start`. Then open the home screen and press
+**Try the starter game**. That runs `templates/starter` through the same frame, relay and checks as a
+game from GitHub. The dev CDN only works when the server listens on this machine (`HOST` is loopback).
+A game in your own `games/` folder still runs the old way (on your server) with `npm run play`, which is
+the quickest loop while you write it.
+
+### How a game from a link runs
+
+Friendslop's server never loads or runs a game from a link. Your game runs in browsers:
+
+- **The host's browser runs your rules.** Your `server.js` and any `bot.js` run in a Web Worker inside a
+  sandboxed frame on the host's page, with the same `ctx` as below. A background tab keeps ticking.
+- **Every player's browser runs your client.** `client/index.js` runs in the same kind of frame, on each
+  player's page, host included.
+- **The server relays.** It passes game messages between the frames and keeps the room: passwords,
+  lobby, teams, chat, scores, stats and results.
+
+Because the host's browser runs the rules, **the host can change scores, and the host controls the
+lobby bots.** The banner over an unreviewed game says so: "The host's computer runs the game, so the
+host could change the score. Choose your friends carefully." A game that can't tolerate a cheating
+host needs a trusted server, which means running friendslop yourself.
+
+### What the fence stops, and what it doesn't
+
+Game code is untrusted, whoever wrote it. It runs in
+`<iframe sandbox="allow-scripts allow-pointer-lock">` **without** `allow-same-origin`, so the frame has
+an opaque origin of its own.
+
+The fence stops:
+
+- Reading friendslop.us storage, cookies, saved sessions or pages, and touching any other room.
+- Ordinary network requests. The frame's Content Security Policy lets it load scripts, images, audio
+  and data from the CDN only.
+- Talking to the server directly. The frame can only `postMessage` the friendslop page, and the page
+  checks that each message came from that frame, has a known shape and is under the size limit.
+  The page owns the WebSocket.
+
+The fence is **best effort**, and it doesn't stop:
+
+- **Seeing players' IP addresses.** A game can still navigate its frame to another address, or use
+  WebRTC, and either one can reach an outside server that sees the player's IP address, the way any
+  website can. The friendslop page notices a frame that navigates away and removes it (if it was the
+  host's frame, the match ends), which doesn't undo the request that already left.
+- **Showing anything on screen,** including a fake login box.
+
+Players are told about the first one before an unreviewed game first loads: they see "Heads up:
+nobody has checked this game. Like any website, it can see your IP address. It probably just wants to
+show you some cubes. Play anyway?" once per repo, and their answer is remembered in that browser. An
+unreviewed game also wears a banner naming the maker and the repo, with a report link that opens a
+prefilled GitHub issue. A repo on the blocklist refuses to load.
+
+### What the server checks
+
+The server doesn't trust the host's frame with anything beyond its own room. Every relayed item is
+checked, and a bad one is skipped:
+
+- Only the host can relay, and only for the match it started. A late relay is refused.
+- A batch holds at most 512 items and 256 KB, and a runner has its own rate limit. A runner that keeps
+  going over it ends the match with "The game sent far too many messages, so friendslop hung up on it."
+  The relayed messages count toward the daily traffic budget like any other.
+- A message to players (`send`, `broadcast`, `sendTeam`) reaches only players in the match, and its
+  type is at most 64 characters.
+- Stat keys match `^[A-Za-z0-9_]{1,32}$`, a player has at most 32 of them, and a value is a finite
+  number or text of at most 64 characters.
+- Scores and teams must name a real team and a finite number, a player must exist to be moved, and
+  `announce` is cleaned, trimmed to the chat limit and rate limited.
+- `endMatch` carries a winner of at most 64 characters, and its text and results period are cleaned
+  by the room.
+
+The checks keep a bad game inside its own room. They can't tell a score the host earned from one the
+host typed.
 
 ## Mental model
 
@@ -24,8 +128,10 @@ Folders in `games/` whose names start with `_` hold code shared between games an
  api.on('state', fn)       ◀──────────────────────  ctx.broadcast('state', {...})   (e.g. in tick)
 ```
 
-- The **server is the authority.** Clients send intent (input, "I fired"), and the server decides outcomes (damage, score).
-  Validate everything a client sends: use `isNum`, `isVec`, `clamp`.
+- Your **`server.js` is the authority.** Clients send intent (input, "I fired"), and `server.js` decides outcomes (damage, score).
+  Validate everything a client sends: use `isNum`, `isVec`, `clamp`. Where `server.js` runs depends on how the game is
+  hosted: on your own server for a game in `games/`, or in the host's browser for a game shared by link
+  (see [Share it with a link](#share-it-with-a-link)). The code is the same either way.
 - **The framework already handles:** rooms, passwords, host controls, lobby, team picking (including an in-game picker on load),
   team scores, per-player stats, the Tab scoreboard, chat, the Esc menu, match start/end, reconnects and late joiners.
 - Messages are JSON. Keep them small (shorten keys, round numbers) for fast-paced games.
@@ -33,6 +139,7 @@ Folders in `games/` whose names start with `_` hold code shared between games an
 ## server.js
 
 ```js
+// Relative imports only (see below).
 import { defineGame, clamp, isNum } from '../../server/kit/index.js';
 
 export default defineGame({
@@ -97,6 +204,12 @@ export default defineGame({
 Hooks are all optional and wrapped in try/catch. A bug in your game logs an error and
 doesn't crash the server. After repeated errors the match is stopped.
 
+**Use relative imports only in `server.js`, `bot.js` and anything they import (including `shared/`).**
+A game shared by link runs them in a Web Worker, and import maps don't apply in workers, so an
+absolute path like `/shared/kit/math.js` or a bare name like `three` won't resolve there. Write
+`../../server/kit/index.js` or `./shared/map.js`. Your `client/index.js` runs on the page and can
+use the absolute `/client/kit/...` paths shown below.
+
 ### `player` objects
 
 Read-only views: `{ id, name, team, ping, connected, bot, spectating, stats }`. They always reflect current values.
@@ -154,10 +267,20 @@ Spectators who chose that in the lobby skip the "pick your team" dialog.
 
 ## bot.js (optional)
 
-A bot is a **real player connection**. It opens its own WebSocket to the server, joins the room,
-receives the same messages your client gets and sends the same ones. The server validates it like
-any human, so a bot can't do anything a player couldn't. If a game has a `bot.js`, the host sees a
-**Bots** panel in the lobby: how many, which team, and difficulty (`easy`, `normal`, `hard`).
+A bot sees the same messages your client gets and sends the same ones, and the server lists it as a
+player. If a game has a `bot.js`, the host sees a **Bots** panel in the lobby: how many, which team,
+and difficulty (`easy`, `normal`, `hard`).
+
+Where a bot runs depends on the room:
+
+- **A game in `games/`, on your own server:** each lobby bot is a real player connection. It opens its
+  own WebSocket, joins the room, and the server validates it like any human, so it can't do anything
+  a player couldn't.
+- **A game shared by link:** lobby bots run in the host's browser, in the same worker as `server.js`,
+  and their messages never cross the network. The host controls them, so they are exactly as honest as
+  the host. Use relative imports in `bot.js`.
+- **Outside programs** (the `npm run bot` runner, or your own code) are real players over WebSocket
+  in both cases. They join with the room code and password.
 
 ```js
 // games/my-game/bot.js  (runs in Node; import shared code with relative paths)
@@ -173,7 +296,7 @@ export default {
 };
 ```
 
-Bots are plain local code. They make no network calls except to your own game server.
+Bots are plain local code and make no network calls of their own.
 `templates/starter/bot.js` is the smallest working bot. For a bot that walks around a 3D level,
 `NavGrid` does the pathfinding (see the server kit helpers above).
 
@@ -212,6 +335,18 @@ export default defineClientGame({
   },
 });
 ```
+
+### Assets
+
+Build asset URLs from `import.meta.url`, so they resolve inside the same pinned commit as your code:
+
+```js
+const ship = new URL('../assets/ship.png', import.meta.url).href;   // from client/index.js
+```
+
+This replaces the old `/games/<id>/assets/...` paths, which only exist on a server that has the game in
+`games/`. The `new URL(...)` form works in both places. The frame loads images, audio and data from
+the CDN only, so an asset has to be a file in your repo (under 20 MB), not a link to somewhere else.
 
 ### `api`
 
@@ -291,5 +426,7 @@ same file works in Node and the browser.
   A refresh keeps your seat in the room.
 - In the browser console, `friendslop.store.room` is the current room state and `friendslop.net` is the connection.
 - `LOG_LEVEL=debug npm start` for chatty logs.
+- `DEV_CDN=1 npm start` and **Try the starter game** runs a game through the link path (frame, relay
+  and checks) without GitHub. See [Share it with a link](#share-it-with-a-link).
 - `npm test`: see `test/spectate.test.js` and the test-only games in `test/fixtures/games/` for how to
   script players against a real server.

@@ -1,5 +1,7 @@
 // Starter: an empty room where everyone is a dot that walks around. No rules, no scoring.
 // `npm run new-game -- <id>` copies this folder to games/<id>/. Add your game on top of it.
+// Shared by a GitHub link, this file runs in the host's browser (in a worker), so the host runs your
+// rules and could change the score. Use relative imports only, as below. See docs/making-a-game.md.
 
 import { defineGame, clamp, isNum } from '../../server/kit/index.js';
 
