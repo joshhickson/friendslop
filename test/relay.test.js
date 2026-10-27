@@ -441,3 +441,43 @@ test('bots alone never keep a remote room open', async () => {
   await sleep(150);
   assert.equal(srv.server.manager.rooms.has(roomId), false);
 });
+
+test('adding or removing several bots is one chat line each', async () => {
+  const s = await setup(metaOf(dots, true));
+  const lines = () => s.guest.messages.filter((m) => m.t === 'chat' && m.system).map((m) => m.text);
+  s.host.send('room:bots', { add: 3 });
+  await s.guest.roomWhere((x) => x.players.filter((p) => p.bot).length === 3);
+  s.host.send('room:bots', { remove: 'all' });
+  await s.guest.nextRoomWhere((x) => x.players.length === 2);
+  await sleep(100);
+  const botLines = lines().filter((t) => t.includes('bot'));
+  assert.deepEqual(botLines, ['3 bots joined.', '3 bots left.']);
+});
+
+test('bot add and remove requests are rate limited in a remote room', async () => {
+  const s = await setup(metaOf(dots, true));
+  for (let i = 0; i < 10; i++) {
+    s.host.send('room:bots', { add: 1 });
+    s.host.send('room:bots', { remove: 'all' });
+  }
+  await sleep(300);
+  const errors = s.host.messages.filter((m) => m.t === 'error').map((m) => m.code);
+  assert.ok(errors.length >= 12, `expected most of 20 requests refused, got ${errors.length}`);
+  assert.ok(errors.every((c) => c === 'rate_limited'), errors.join());
+  // The guest saw a handful of batches, not twenty.
+  const botLines = s.guest.messages.filter((m) => m.t === 'chat' && m.system && m.text.includes('bot'));
+  assert.ok(botLines.length <= 8, `guest got ${botLines.length} bot lines`);
+});
+
+test('auto-fill hands the runner only a known difficulty', async () => {
+  const meta = {
+    ...metaOf(dots, true),
+    settings: [...metaOf(dots).settings, { key: 'skill', type: 'select', default: 'brutal', options: ['brutal', 'hard'] }],
+    autoFill: { perTeam: 1, difficultySetting: 'skill' },
+  };
+  const s = await soloHost(meta);
+  s.host.send('room:start');
+  await s.host.next((m) => m.t === 'match:start');
+  const join = await s.host.waitFor(isEvent('join', (m) => m.virtual === true));
+  assert.deepEqual(join.options, { difficulty: 'normal' });
+});

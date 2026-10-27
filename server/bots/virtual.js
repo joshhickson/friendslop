@@ -33,8 +33,8 @@ export class VirtualBots {
   }
 
   /** Adds one bot at once. Returns a promise only to match BotManager.spawn. */
-  async spawn(room, { team = 'auto', difficulty = 'normal', filler = false } = {}) {
-    const p = room.addPlayer(pickBotName(room), new VirtualConn(), { bot: true, team });
+  async spawn(room, { team = 'auto', difficulty = 'normal', filler = false, quiet = false } = {}) {
+    const p = room.addPlayer(pickBotName(room), new VirtualConn(), { bot: true, team, quiet });
     p.filler = filler;
     p.difficulty = difficulty;
     // Nothing has to load for a bot: it is in the match as soon as there is one.

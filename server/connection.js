@@ -230,7 +230,7 @@ export class Connection {
         break;
       case C2S.BOTS:
         if (!isHost) err = 'not_host';
-        else if (msg.remove !== undefined) room.removeBots(msg.remove);
+        else if (msg.remove !== undefined) err = room.removeBots(msg.remove);
         else err = room.addBots({ count: msg.add, team: msg.team, difficulty: msg.difficulty });
         break;
       case C2S.KICK: {

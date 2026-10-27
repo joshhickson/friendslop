@@ -5,13 +5,15 @@ import { Match } from './match.js';
 import { RemoteMatch } from './remote-match.js';
 import { VirtualBots, VirtualConn } from './bots/virtual.js';
 import { coerceSettings } from './kit/defineGame.js';
-import { randomId, randomToken } from './security.js';
+import { randomId, randomToken, TokenBucket } from './security.js';
 import { S2C, cleanText, LIMITS } from '../shared/protocol.js';
 
 const CHAT_HISTORY = 40;
 const HOST_HANDOFF_MS = 5000;
 // Seats beyond the game's player limit, for spectators (e.g. a host watching a full 10v10 of bots).
 const SPECTATOR_SEATS = 4;
+const DIFFICULTIES = ['easy', 'normal', 'hard'];
+const botsLine = (n, verb) => `${n} ${n === 1 ? 'bot' : 'bots'} ${verb}.`;
 
 class Player {
   constructor(name) {
@@ -75,6 +77,9 @@ export class Room {
     this.flushTimer = null;
     this.createdAt = Date.now();
     this.lastActivity = this.createdAt; // last message from a human (bots don't count)
+    // A virtual bot joins and leaves in the same call, so a host of a remote room gets a limit on
+    // how fast it can add and remove them (socket bots are slowed by their own handshake).
+    this.botBucket = new TokenBucket(2, 6);
     this.#setGame(def);
   }
 
@@ -155,7 +160,7 @@ export class Room {
   // ---- membership -----------------------------------------------------------
 
   /** Adds a new player. Caller has already checked password / capacity. */
-  addPlayer(name, conn, { bot = false, team = 'auto' } = {}) {
+  addPlayer(name, conn, { bot = false, team = 'auto', quiet = false } = {}) {
     const p = new Player(this.#uniqueName(name));
     p.bot = bot;
     // No playing slot left (the teams are full): humans come in as spectators.
@@ -164,7 +169,7 @@ export class Room {
     if (!this.hostId && !bot) this.hostId = p.id;
     p.team = p.spectating ? null : this.def.teams?.some((t) => t.id === team) ? team : this.#autoTeam(p);
     this.attach(p, conn);
-    this.systemChat(`${p.name} joined.`);
+    if (!quiet) this.systemChat(`${p.name} joined.`);
     if (!bot) this.balanceBots();
     return p;
   }
@@ -179,13 +184,17 @@ export class Room {
   addBots({ count = 1, team = 'auto', difficulty = 'normal' } = {}) {
     const bots = this.bots;
     if (!this.#hasBotBrain()) return 'no_bots';
+    if (this.def.source && !this.botBucket.take()) return 'rate_limited';
     if (team !== 'auto' && !this.def.teams?.some((t) => t.id === team)) return 'bad_team';
     const n = Math.max(0, Math.min(Math.floor(Number(count) || 0), this.maxPlayers - this.playingCount - this.#pendingBots()));
     if (n === 0) return 'room_full';
-    const diff = ['easy', 'normal', 'hard'].includes(difficulty) ? difficulty : 'normal';
+    const diff = DIFFICULTIES.includes(difficulty) ? difficulty : 'normal';
+    const virtual = Boolean(this.def.source);
     for (let i = 0; i < n; i++) {
-      bots.spawn(this, { team, difficulty: diff }).catch((err) => this.log.warn(`bot failed to join: ${err.message}`));
+      bots.spawn(this, { team, difficulty: diff, quiet: virtual }).catch((err) => this.log.warn(`bot failed to join: ${err.message}`));
     }
+    // One line for the batch: a virtual bot joins at once, so n lines would reach every guest at once.
+    if (virtual) this.systemChat(botsLine(n, 'joined'));
     return null;
   }
 
@@ -199,7 +208,10 @@ export class Room {
     if (fill.setting && !this.settings[fill.setting]) return;
     const bots = this.bots;
     if (!this.#hasBotBrain()) return;
-    const difficulty = fill.difficultySetting ? this.settings[fill.difficultySetting] : 'normal';
+    const wanted = fill.difficultySetting ? this.settings[fill.difficultySetting] : 'normal';
+    const difficulty = DIFFICULTIES.includes(wanted) ? wanted : 'normal';
+    const virtual = Boolean(this.def.source);
+    let added = 0;
     const pending = bots.pending(this);
     for (const t of this.def.teams) {
       const members = [...this.players.values()].filter((p) => p.team === t.id && !p.spectating);
@@ -207,30 +219,47 @@ export class Room {
       const free = this.maxPlayers - this.playingCount - this.#pendingBots();
       if (have < fill.perTeam) {
         for (let i = 0; i < Math.min(fill.perTeam - have, free); i++) {
-          bots.spawn(this, { team: t.id, difficulty, filler: true }).catch((err) => this.log.warn(`bot failed to join: ${err.message}`));
+          bots.spawn(this, { team: t.id, difficulty, filler: true, quiet: virtual }).catch((err) => this.log.warn(`bot failed to join: ${err.message}`));
+          added++;
         }
       } else if (have > fill.perTeam) {
         // Too many: drop this team's bots, newest first (humans are never removed).
         const extra = members.filter((p) => p.bot).sort((a, b) => (b.filler - a.filler) || (b.joinedAt - a.joinedAt)).slice(0, have - fill.perTeam);
         this.balancing = true;
         try {
-          for (const p of extra) this.removePlayer(p, 'kicked');
+          this.#removeBots(extra, 'kicked');
         } finally {
           this.balancing = false;
         }
       }
     }
+    if (virtual && added) this.systemChat(botsLine(added, 'joined'));
+  }
+
+  /**
+   * Removes several bots at once. Virtual bots in a batch share one chat line (they all leave in
+   * the same call, so one line each would reach every guest at once).
+   */
+  #removeBots(players, reason) {
+    const quiet = players.length > 1 && players.every((p) => p.conn instanceof VirtualConn);
+    let n = 0;
+    for (const p of players) {
+      if (!this.players.has(p.id)) continue;
+      this.removePlayer(p, reason, { quiet });
+      n++;
+    }
+    if (quiet && n && this.players.size) this.systemChat(botsLine(n, 'left'));
   }
 
   #pendingBots() {
     return Object.values(this.bots?.pending(this) ?? {}).reduce((a, b) => a + b, 0);
   }
 
-  /** Host action: remove one bot by id, or every bot with 'all'. */
+  /** Host action: remove one bot by id, or every bot with 'all'. Returns an error code or null. */
   removeBots(which) {
-    for (const p of [...this.players.values()]) {
-      if (p.bot && (which === 'all' || p.id === which)) this.removePlayer(p, 'kicked');
-    }
+    if (this.def.source && !this.botBucket.take()) return 'rate_limited';
+    this.#removeBots([...this.players.values()].filter((p) => p.bot && (which === 'all' || p.id === which)), 'kicked');
+    return null;
   }
 
   findByToken(token) {
@@ -276,7 +305,7 @@ export class Room {
   }
 
   /** Player is gone for good (left, kicked, or reconnect grace expired). */
-  removePlayer(player, reason = 'left') {
+  removePlayer(player, reason = 'left', { quiet = false } = {}) {
     if (!this.players.has(player.id)) return;
     clearTimeout(player.graceTimer);
     this.match?.playerGone(player);
@@ -288,7 +317,7 @@ export class Room {
       conn.send(S2C.LEFT, { reason });
     }
     const verb = reason === 'kicked' ? 'was kicked' : reason === 'timeout' ? 'disconnected' : 'left';
-    this.systemChat(`${player.name} ${verb}.`);
+    if (!quiet) this.systemChat(`${player.name} ${verb}.`);
 
     if (this.hostId === player.id) this.#pickNewHost();
     // Bots never keep a room alive on their own.
@@ -520,7 +549,7 @@ export class Room {
     if (fillers.length) {
       this.balancing = true;
       try {
-        for (const p of fillers) this.removePlayer(p, 'left');
+        this.#removeBots(fillers, 'left');
       } finally {
         this.balancing = false;
       }
