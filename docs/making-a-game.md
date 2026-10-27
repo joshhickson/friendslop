@@ -78,17 +78,17 @@ an opaque origin of its own.
 The fence stops:
 
 - Reading friendslop.us storage, cookies, saved sessions or pages, and touching any other room.
-- Ordinary network requests. The frame's Content Security Policy lets it load scripts, images, audio
-  and data from the CDN only.
+- Ordinary network requests. The frame's Content Security Policy limits what it can load (scripts,
+  images, audio, data) to the CDN, plus friendslop's own frame code.
 - Talking to the server directly. The frame can only `postMessage` the friendslop page, and the page
   checks that each message came from that frame, has a known shape and is under the size limit.
   The page owns the WebSocket.
 
 The fence is **best effort**, and it doesn't stop:
 
-- **Seeing players' IP addresses.** A game can still navigate its frame to another address, or use
-  WebRTC, and either one can reach an outside server that sees the player's IP address, the way any
-  website can. The friendslop page notices a frame that navigates away and removes it (if it was the
+- **Seeing players' IP addresses.** A game can still, for example, navigate its frame to another
+  address or use WebRTC, and either one can reach an outside server that sees the player's IP address,
+  the way any website can. The friendslop page notices a frame that navigates away and removes it (if it was the
   host's frame, the match ends), which doesn't undo the request that already left.
 - **Showing anything on screen,** including a fake login box.
 
@@ -346,7 +346,7 @@ const ship = new URL('../assets/ship.png', import.meta.url).href;   // from clie
 
 This replaces the old `/games/<id>/assets/...` paths, which only exist on a server that has the game in
 `games/`. The `new URL(...)` form works in both places. The frame loads images, audio and data from
-the CDN only, so an asset has to be a file in your repo (under 20 MB), not a link to somewhere else.
+the CDN only, so an asset has to be a file in your repo (under 20 MB).
 
 ### `api`
 

@@ -70,15 +70,15 @@ Other protections in place:
 - Room passwords are hashed with scrypt. Wrong guesses are rate-limited per IP and per room, with a temporary lockout.
 - WebSocket connections are only accepted from the game's own page (Origin check), so other websites you visit can't connect through your browser.
 - The Host header is allowlisted, which blocks DNS-rebinding attacks.
-- A strict Content-Security-Policy is set, plus `nosniff` and no framing.
+- A strict Content-Security-Policy is set, plus `nosniff` and no framing. The one page that may be framed is the game frame page (`/frame/`), and only by friendslop's own pages.
 - Message size limits, per-connection rate limits, per-IP connection caps, and room/creation caps.
 - Only `client/`, `shared/` and each game's `client/`, `shared/`, `assets/` folders are served. Game `server.js` files and `server/` are never exposed.
 - All client messages are validated. Games keep `server.js` in charge of state and score, and the starter template shows how.
-- **Games shared by link run inside a sandboxed frame,** not on the server. The frame is
+- **Games shared by link run inside a sandboxed frame,** and the server runs no game code. The frame is
   `<iframe sandbox="allow-scripts allow-pointer-lock">` with an opaque origin, so game code can't
-  read friendslop's storage, cookies or pages. Its Content Security Policy limits scripts, images, audio and
-  data to the CDN, and it talks to the page only by `postMessage`, which the page checks. It is **best
-  effort**: a game can still navigate its frame or use WebRTC, so it can see players' IP addresses, and it can
+  read friendslop's storage, cookies or pages. Its Content Security Policy limits what the frame can load to the CDN (plus
+  friendslop's own frame code), and it talks to the page only by `postMessage`, which the page checks. It is **best
+  effort**: a game can still, for example, navigate its frame or use WebRTC, so it can see players' IP addresses, and it can
   show anything on screen, such as a fake login box. See [games shared by link](#games-shared-by-link).
 - **For those games, the host's browser runs the rules,** so the host can change scores and controls the
   lobby bots. The server checks every item the host's frame relays, but it can't know whether a score was earned.
@@ -118,7 +118,7 @@ home screen and gets a room link to send to friends. Nobody downloads or hosts a
   from [jsDelivr](https://www.jsdelivr.com), pinned to one commit, so everyone runs identical code.
   Repos must be public, files under 20 MB, and a commit under 150 MB (jsDelivr's limits).
 - **The frame is best effort.** It stops friendslop's own storage, cookies and pages and ordinary
-  network requests. It does not stop a game from navigating its frame or using WebRTC, which can reach
+  network requests. It does not stop a game from, for example, navigating its frame or using WebRTC, which can reach
   an outside server and reveal a player's IP address, or from showing a fake login box.
   Players see a first-look warning about the IP address once per repo, and an unreviewed game wears a
   banner with the maker, the repo and a report link. `blocklist.json` retires a repo.
