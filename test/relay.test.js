@@ -396,6 +396,20 @@ test('a runner asking for more deliveries than its budget ends the match, and ot
   assert.equal(s.host.ws.readyState, 1, 'the host stays connected');
 });
 
+test('a runner flipping a player\'s team pays for the chat line everyone gets', { timeout: 15000 }, async () => {
+  const s = await setup(metaOf(dots));
+  await play(s);
+  const ended = s.guest.next((m) => m.t === 'match:end', 5000);
+  // Each change sends a chat line to both players and a team event to the runner: 3 deliveries,
+  // so a burst of 4000 pays for about 1333 changes before the drops end the match.
+  const batch = Array.from({ length: LIMITS.MAX_RELAY_MSGS }, (_, i) => ctx('setTeam', s.guestId, i % 2 ? 'red' : 'blue'));
+  for (let i = 0; i < 20; i++) relay(s.host, batch);
+  const end = await ended;
+  assert.equal(end.result.text, COPY.gameTooChatty);
+  const lines = s.guest.messages.filter((m) => m.t === 'chat' && m.system).length;
+  assert.ok(lines > 0 && lines < 2000, `the guest got ${lines} chat lines`);
+});
+
 test('a 60 Hz broadcast to a full room stays inside the delivery budget', { timeout: 20000 }, async () => {
   // 20 players (2 people and 18 bots) and 4 spectators: every broadcast reaches 24 seats.
   const s = await setup({ ...metaOf(dots, true), maxPlayers: 20 });

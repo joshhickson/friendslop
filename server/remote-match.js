@@ -129,7 +129,9 @@ export class RemoteMatch {
       if (item.k === 'out') this.#out(item);
       else if (item.k === 'ctx' && Array.isArray(item.args)) {
         // Ending the match is never refused: it is where a game over its budget ends up anyway.
-        if (item.op !== 'endMatch' && !this.#spend(1)) continue;
+        // A team change sends a chat line to everyone in the room and an event to the runner.
+        const cost = item.op === 'setTeam' ? 1 + this.room.players.size : 1;
+        if (item.op !== 'endMatch' && !this.#spend(cost)) continue;
         this.#ctx(item.op, item.args);
       }
     }
