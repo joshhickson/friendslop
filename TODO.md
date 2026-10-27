@@ -17,8 +17,9 @@ and the website still has three styles. He likes only the first.
 
 ## Before showing friendslop to a real maker
 
-- Render account and Blueprint deploy (Josh signs up; Claude walks him through it).
-- GoDaddy CNAME: `play.friendslop.us` to the Render service.
+- GoDaddy CNAME: `play.friendslop.us` to `friendslop-2c4h.onrender.com`, then check Render shows
+  the domain as verified. (The Render service has been live since 2026-10-27, deploying `main` on
+  every push.)
 - Merge the site's `instant-game-links` branch and push it, only once `play.friendslop.us` answers.
 - Docs page on friendslop.us with a copy-paste agent setup command (design in progress).
 - Josh's wording review: `.superpowers/sdd/2026-10-26-instant-game-links/wording-for-josh.md`,

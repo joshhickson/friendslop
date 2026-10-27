@@ -17,9 +17,9 @@ services:
       # Render sends traffic to the PORT it sets; listen on every interface to receive it.
       - key: HOST
         value: 0.0.0.0
-      # If Render gives the service a different onrender.com name, put that name here.
+      # The service's onrender.com name, as Render's dashboard shows it, and the custom domain.
       - key: ALLOWED_HOSTS
-        value: play.friendslop.us,friendslop.onrender.com
+        value: play.friendslop.us,friendslop-2c4h.onrender.com
       # Render's proxy puts the player's address first in X-Forwarded-For.
       - key: TRUST_PROXY
         value: "1"
