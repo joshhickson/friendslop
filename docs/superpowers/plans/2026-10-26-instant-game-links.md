@@ -391,4 +391,38 @@ Environment-neutral, so Node tests can drive it against the real server.
 
 ## Spike results
 
-(Task 1 fills this in. RUNNER_LOCATION: TBD.)
+Run 2026-10-27. Two origins on 127.0.0.1:7801 (play) and :7802 (CDN) with the Step 1 headers. Browsers: Claude desktop built-in pane (Chrome 152, Electron) and Playwright Chromium 155. The built-in pane refuses every network request made by the main thread of an opaque-origin frame (the request never reaches the server, even for the frame's own origin), so the import, navigation and isolation checks were driven in Playwright Chromium 155 and the background-tab check in the built-in pane. Both browsers agree wherever both could run a check.
+
+**RUNNER_LOCATION: worker**, with one change to the plan's construction. The brief's exact worker (`new Worker(blobURL, {type:'module'})`) FAILS from the opaque frame in both browsers (the worker fires `error` before running). Two constructions pass, and the build must use one of them:
+
+- `new Worker('data:text/javascript;charset=utf-8,' + encodeURIComponent(src), {type:'module'})`: starts, runs `await import('http://127.0.0.1:7802/gamerel.js')`, loads `kit/thing.js`, ticks.
+- `new Worker(URL.createObjectURL(new Blob([src], {type:'text/javascript'})))` as a classic worker, with `import()` inside an async wrapper: same result.
+
+Task 7 (line "in a blob module worker") should read "in a data-URL module worker (or a blob classic worker)". Also note: in the worker `self.origin` is `"null"`, and a worker made straight from the CDN URL is refused (`SecurityError: Script ... cannot be accessed from origin 'null'`), so the loader source must be inlined as above.
+
+| Step | Result | Evidence |
+|---|---|---|
+| 2 scoped import map | PASS | In the opaque frame (Chromium 155) `import('http://127.0.0.1:7802/game.js')` loaded and `game.js`'s `import '/kit-abs/thing.js'` resolved to `kit/thing.js` ("kit/thing.js loaded from http://127.0.0.1:7802/kit/thing.js"). The frame's own `import('/x.js')` loaded from 7801 un-remapped. The frame's `import('/kit-abs/thing.js')` was not remapped: 404 on 7801. |
+| 2b import maps in workers | FAIL as the constraints predicted | A module worker doing `import('.../game.js')` fails (`Failed to fetch dynamically imported module`) because `/kit-abs/thing.js` is not remapped. Worker-side game code must use relative imports (`gamerel.js` with `./kit/thing.js` passed). |
+| 3 module worker | PASS with data: URL or blob classic, FAIL with blob module | See above. `blob module tiny`, `blob module import`: `onerror`. `data module import`, `blob classic import`: imported cross-origin `gamerel.js`. |
+| 3 background rate | PASS | Worker 20.0 ticks per second visible and 20.0 hidden (below). |
+| 4 main thread background | Throttled | 20.0 per second visible, 1.0 per second hidden. |
+| 5 pointer lock | NOT VERIFIABLE HERE | See below. |
+| 6 navigation | PASS | Real click on the frame's button: the parent's iframe `load` count went 1 to 2 (Chromium 155). In the built-in pane a posted `nav` message also took it 1 to 2. |
+| 7 isolation | PASS | `parent.document` and `parent.location.href` throw `SecurityError` (cross-origin frame blocked from origin "null"). `localStorage`, `sessionStorage` and `document.cookie` each throw `SecurityError` ("sandboxed and lacks the 'allow-same-origin' flag"). `self.origin` is `"null"`. |
+
+**Tick rates** (setInterval 50 ms, so 20 per second expected; counted from the frame and timed on the parent clock):
+
+| Thread | Foreground | Background (tab hidden, `visibilityState` = hidden) |
+|---|---|---|
+| Worker (data: module, blob classic) | 20.01 and 20.01 per second over 11 s (Chromium 155); 19.99 to 20.03 over 9 s (built-in pane) | 20.00 per second over 8 s, then 19.99 per second over 13 s |
+| Frame main thread | 20.01 per second over 11 s (Chromium 155); 19.99 over 9 s (built-in pane) | 1.00 per second over 8 s, then 1.00 per second over 12 s |
+
+The hidden windows were 9.6 s and 13.2 s, not one 20 s block: the pane flipped the tab back to visible on its own both times, so the 20 s was split across two runs (about 21 s of hidden samples in all). The background numbers come from the built-in pane with self-contained tickers in the opaque frame (no network, because of the pane's block above); the same worker constructions were shown to import and tick over the network in Chromium 155 while visible. Playwright's Chromium never reported `hidden`, so it gave foreground numbers only.
+
+**Step 5 pointer lock: not verifiable here.** Every `requestPointerLock()` was rejected with `WrongDocumentError: The root document of this element is not valid for pointer lock.`, followed by `pointerlockerror`. This happened with a trusted click (Playwright) and a trusted key press (built-in pane) inside the sandboxed frame, with the frame unsandboxed (`?plain`), and with a plain top-level page with no iframe at all, in both browsers. So the failure is the automation environments, not the sandbox, and nothing was learned about `document.pointerLockElement`, `pointerlockchange` or `exitPointerLock()` in the parent. The built-in pane's click tool also refused to dispatch into the iframe ("frame owner is CSS-transformed (scaled)") until a trusted key press was used. Josh needs to run this one by hand in a real browser: open `parent.html` from the spike scratch folder with `serve.mjs` running, click the blue canvas, then read `R.lock` in the console and press "exitPointerLock". The `allow="local-network-access ..."` attribute I tried on the iframe was irrelevant and is not needed.
+
+**Header and CSP differences from Step 1:** none needed. `Content-Security-Policy: sandbox allow-scripts allow-pointer-lock; frame-ancestors 'self'` on `frame.html` plus `Access-Control-Allow-Origin: *` and `Cross-Origin-Resource-Policy: cross-origin` on every response was enough for the passes above. Two things to carry into the build:
+
+- **The CSP sandbox applies per response.** When the frame navigated to `/elsewhere` (a response without the CSP header), it became a normal same-origin document the parent could read (`iframe.contentDocument.title` returned "elsewhere" in Chromium 155). The load listener catches the navigation, but the runner should also set a `sandbox` attribute on the `<iframe>` itself (same flags) so a navigated-to page is sandboxed too, or tear the frame down on the second `load`.
+- **If a stricter CSP is added later,** `data:` must be allowed in `worker-src` (and `script-src`) for the data-URL worker, or the blob classic worker used instead (needs `blob:`).
