@@ -1,0 +1,29 @@
+{
+  "name": "friendslop",
+  "version": "0.1.0",
+  "description": "A kit for vibecoding small, chaotic multiplayer games: rooms, lobbies, bots and hosting, done once.",
+  "license": "Apache-2.0",
+  "homepage": "https://friendslop.us",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joshhickson/friendslop.git"
+  },
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server/start.js",
+    "play": "node server/start.js --open",
+    "tunnel": "node server/start.js --tunnel",
+    "dev": "node --watch-path=server --watch-path=shared --watch-path=games server/start.js",
+    "test": "node --test --test-concurrency=1 \"test/*.test.js\"",
+    "new-game": "node scripts/new-game.js",
+    "bot": "node scripts/bot.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "three": "^0.186.1",
+    "ws": "^8.22.0"
+  }
+}

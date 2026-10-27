@@ -1,43 +1,168 @@
 # friendslop
 
 A kit for vibecoding small, chaotic multiplayer games and playing them with your friends tonight.
+One central Node server, WebSockets, rooms with a code and password, a lobby with teams, bots,
+and a browser client. Games are drop-in folders.
 
-**Status: alpha, in testing. The code lands here soon.** Teaser: [friendslop.us](https://friendslop.us)
+**Status: alpha.** Teaser and roadmap: [friendslop.us](https://friendslop.us)
 
-## What it's for
+**No games are included yet.** The alpha is the framework: rooms, the lobby, teams, bots, spectating
+and hosting. You bring the game. `npm run new-game` starts you from a template where everyone is a dot
+that walks around, and you add the rules.
 
-The boring parts of a multiplayer game, done once, so every new idea starts at the fun part:
+## Quick start
 
-- **Rooms with a code and a password.** Send the code to the group chat, keep the randoms out.
-- **A lobby where the host runs the show.** Pick teams, see who's in, start the match.
-- **Game modes that snap in.** Each game is a folder dropped into the same foundation.
-- **Bots that join like players.** They fill empty slots, and they connect the same way people do, so your own code can drive one.
-- **Host from your own PC.** Share a link and friends join from anywhere, with no router settings to touch.
-- **Runs in a browser.** Your friends click a link. Nobody installs anything.
+Requires Node.js 20+.
 
-## What the alpha has so far
-
-- **One command** starts the server and opens the game in your browser.
-- **Local-only by default.** Nothing is reachable from other computers until you choose to share a link.
-- **Rooms, passwords, a lobby with teams and scores**, host controls, chat, a scoreboard and reconnects, handled by the framework.
-- **The server is in charge** of health, hits, flags and score, so clients can't cheat their way to a win.
-- **Capture the flag:** a low-poly, first-person shooter on one map. Shoot, take hits, respawn, capture flags.
-- **A tiny 2D demo game** that doubles as the template for new games.
-- **A new-game script and a how-to guide**, so the next game starts from a working folder.
-- **Automated tests** that drive real servers with scripted players.
-
-In the works: bots, a respawn wait with spectating, and a second mode, Control points.
-
-## How it's laid out
-
-```
-server/   the Node server: rooms, matches, connections
-client/   the browser app: home screen, lobby, in-match overlay
-shared/   code both sides use, including the network protocol
-games/    one folder per game, each with its own server and client code
+```sh
+npm run new-game -- my-game "My Game"   # copies the starter template to games/my-game/
+npm run play                            # starts the server and opens your browser
 ```
 
-A game only handles what's unique to it. The framework does the rest.
+On first run `npm run play` installs dependencies, starts the server, and opens
+`http://localhost:8080` in your browser.
+
+If you'd rather open the browser yourself, use `npm start` and go to **http://localhost:8080**.
+For friends on other networks, use `npm run tunnel` (see [below](#playing-with-friends-on-other-networks)).
+
+**Testing multiplayer on one PC:** open the address in two browser windows, or one normal and one private window.
+Each tab is a separate player.
+
+1. Window 1: enter a name, optionally a password, then **Create room**. You're the host.
+2. Window 2: enter a name, then **Join room** with the 6-letter code and the password.
+3. If the game has teams, pick one by clicking a team column. The host presses **Start match**.
+
+**Spectating:** click **Spectate instead** in the lobby, or pick **Spectate** from the team picker or the
+Esc menu. Spectators see everything the game broadcasts and can join a team at any time.
+
+### Bots
+
+For games that have a `bot.js`, the host's **Bots** panel in the lobby adds any number of bots, to a chosen team or balanced, at
+easy, normal or hard. Remove one with its **remove** button, or all at once. The starter template
+comes with a bot that wanders around.
+Bots are real player connections that go through the normal join path, run entirely on your machine,
+and don't call any outside service. They never become host, and a room closes when its last human leaves.
+
+To run bots from a separate program (or another computer), use the room code and password like a person would:
+
+```sh
+npm run bot -- --room ABC123 --password pizza --count 2 --difficulty hard
+```
+
+See [docs/making-a-game.md](docs/making-a-game.md#botjs-optional) to write a bot for your game, or to
+drive a player from your own code.
+
+## Security and networking
+
+**The default is local-only.** The server binds to `127.0.0.1`, so no other computer
+can connect. Nothing is exposed on your network or the internet, and nothing is
+port-forwarded. Players never connect to each other, only to the central server, so
+friends' IPs are never shared.
+
+Other protections in place:
+
+- Room passwords are hashed with scrypt. Wrong guesses are rate-limited per IP and per room, with a temporary lockout.
+- WebSocket connections are only accepted from the game's own page (Origin check), so other websites you visit can't connect through your browser.
+- The Host header is allowlisted, which blocks DNS-rebinding attacks.
+- A strict Content-Security-Policy is set, plus `nosniff` and no framing.
+- Message size limits, per-connection rate limits, per-IP connection caps, and room/creation caps.
+- Only `client/`, `shared/` and each game's `client/`, `shared/`, `assets/` folders are served. Game `server.js` files and `server/` are never exposed.
+- All client messages are validated. Games keep the server in charge of state and score, and the starter template shows how.
+
+### Playing with friends on other networks
+
+```sh
+npm run tunnel
+```
+
+This prints a public `https://<random-words>.trycloudflare.com` address. Send that plus the
+room password to your friends. It uses a Cloudflare **quick tunnel**:
+
+- **No account and no setup.** The first run downloads `cloudflared` into `.tools/` (gitignored) and checks it against a pinned SHA-256 before running it.
+  An existing `cloudflared` on your PATH, or one pointed to by `CLOUDFLARED=…`, is used instead.
+- **Your PC stays closed.** `cloudflared` only makes outbound connections to Cloudflare, and the game server still
+  only listens on `127.0.0.1`. No ports are opened or forwarded and no router or firewall changes are needed.
+  Friends connect to Cloudflare and never see your IP, and you never see theirs.
+- **HTTPS/WSS end-to-end** to Cloudflare, with the same Host/Origin/CSP protections as local play. Only that
+  run's tunnel hostname is added to the allowlist.
+- **Rate limits use each player's real IP** (Cloudflare's `Cf-Connecting-Ip`, trusted only on connections from the local tunnel).
+- **For testing only:** the URL changes every run, stops when you press Ctrl+C, and has no uptime guarantee.
+  For a permanent address, use a named Cloudflare tunnel (free account) or a VPS:
+  `ALLOWED_HOSTS=yourgame.example.com TRUST_CLOUDFLARE=1 npm start` behind your own tunnel.
+
+Anyone with the URL can reach the home screen, so give rooms a password when playing over the tunnel.
+
+### Configuration
+
+All settings are environment variables (or `--port`, `--host`, `--open` flags).
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `PORT` | `8080` | HTTP/WebSocket port |
+| `HOST` | `127.0.0.1` | Bind address. Leave it alone unless you know you want LAN access. |
+| `ALLOWED_HOSTS` | (none) | Extra hostnames accepted in the `Host` header (e.g. a tunnel domain) |
+| `ALLOWED_ORIGINS` | (none) | Extra origins allowed to open WebSockets |
+| `TRUST_PROXY` | off | `1` = use `X-Forwarded-For` for rate limiting (only behind your own proxy) |
+| `TUNNEL` | off | `1` = same as `--tunnel` (Cloudflare quick tunnel, public URL) |
+| `TRUST_CLOUDFLARE` | off | `1` = use `Cf-Connecting-Ip` from local connections (on automatically with `--tunnel`) |
+| `CLOUDFLARED` | (auto) | path to a `cloudflared` binary to use instead of downloading one |
+| `GAMES_DIR` | `games/` | Folder the games are loaded from |
+| `DEFAULT_GAME` | (first game) | Game preselected on the home screen |
+| `MAX_ROOMS` | `100` | |
+| `MAX_PLAYERS_PER_ROOM` | `20` | Also capped by each game's `maxPlayers` |
+| `RECONNECT_GRACE_MS` | `20000` | How long a dropped player keeps their seat |
+| `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`, `silent` |
+
+## Making games
+
+```sh
+npm run new-game -- my-game "My Game"
+npm run dev        # restarts the server when server-side files change; refresh the browser for client changes
+```
+
+See **[docs/making-a-game.md](docs/making-a-game.md)** for the full guide and API.
+
+In short, a game is a folder:
+
+```
+games/my-game/
+  server.js          export default defineGame({...})  - rules, authoritative state
+  client/index.js    export default defineClientGame({ mount(api) {...} })  - rendering + input
+  bot.js             optional: what bots do
+  shared/            optional: code/data used by both (maps, constants)
+  assets/            optional: images, sounds, models
+```
+
+The framework handles rooms, passwords, host, lobby, teams, team scores, per-player stats,
+the scoreboard, chat, match start/end, reconnects and the pause menu. Your game only
+handles what's unique to it.
+
+## Project layout
+
+```
+server/            Node server: HTTP + WebSocket, rooms, matches, security
+  kit/             what game server code imports (defineGame + helpers)
+  bots/            BotClient (a player over WebSocket) + lobby bot manager
+client/            Browser app: home, lobby, in-match overlay
+  kit/             what game client code imports (input, sound, three.js helpers)
+shared/            protocol + helpers used on both sides (math, physics, pathfinding, history, timers)
+games/             one folder per game (starts empty)
+templates/starter/ what `npm run new-game` copies
+scripts/           new-game scaffolder, standalone bot runner
+test/              node:test suites, run with `npm test`
+  fixtures/games/  two tiny games that exist only for the tests
+```
+
+## Tests
+
+```sh
+npm test
+```
+
+Spins up real servers on random ports and drives them with scripted WebSocket clients.
+Covers rooms, passwords, lockouts, host powers, teams, reconnects, origin checks, match endings,
+spectating and team locks, bots (adding and removing, tickets, external bots, pathfinding),
+a server with no games, and the starter template.
 
 ## Languages
 
