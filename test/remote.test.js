@@ -43,6 +43,7 @@ async function createRemote(def, source = SOURCE, base = srv.base) {
   const host = await client(base);
   host.send('room:create', { name: 'Host', password: '', source, def });
   const msg = await host.next((m) => m.t === 'welcome' || m.t === 'error');
+  if (msg.t === 'error') host.close(); // keeps the run under the per-IP connection limit
   return { host, msg };
 }
 
@@ -186,4 +187,35 @@ test('an untrusted definition cannot smuggle odd setting keys or values', async 
   const dup = { key: 'a', type: 'boolean', label: 'x', default: true };
   const { msg } = await createRemote({ ...starterMeta(), settings: [dup, dup] });
   assert.equal(msg.code, 'bad_source');
+});
+
+test('a scoreboard column without a label gets its key, cut to 24 characters', async () => {
+  const key = 'k'.repeat(32);
+  const { msg } = await createRemote({ ...starterMeta(), scoreboard: [{ key }, { key: 'wins', label: 'W‮ins' }] });
+  assert.equal(msg.t, 'welcome');
+  assert.equal(msg.room.game.scoreboard[0].key, key);
+  assert.equal(msg.room.game.scoreboard[0].label, 'k'.repeat(24));
+  assert.equal(msg.room.game.scoreboard[1].label, 'Wins');
+});
+
+test('scoreboard keys must be stat-key shaped and unique', async () => {
+  for (const scoreboard of [[{ key: 'a b' }], [{ key: 'a‮b' }], [{ key: 'k'.repeat(33) }], [{ key: '' }], [{ key: 'a' }, { key: 'a', label: 'again' }]]) {
+    const { msg } = await createRemote({ ...starterMeta(), scoreboard });
+    assert.equal(msg.code, 'bad_source', JSON.stringify(scoreboard));
+    assert.match(msg.message, /scoreboard/);
+  }
+});
+
+test('a select option without a label gets its cleaned value, and long values are refused', async () => {
+  const select = (options) => ({ key: 'mode', type: 'select', label: 'Mode', default: 'a', options });
+  const ok = await createRemote({ ...starterMeta(), settings: [select(['a‮b' + 'z'.repeat(30), 7])] });
+  assert.equal(ok.msg.t, 'welcome');
+  const [first, second] = ok.msg.room.game.settings[0].options;
+  assert.equal(first.label, 'ab' + 'z'.repeat(30));
+  assert.equal(second.label, '7');
+  for (const options of [['a'.repeat(41)], [{ value: 'a'.repeat(41), label: 'ok' }]]) {
+    const { msg } = await createRemote({ ...starterMeta(), settings: [select(options)] });
+    assert.equal(msg.code, 'bad_source');
+    assert.match(msg.message, /option/);
+  }
 });

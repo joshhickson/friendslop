@@ -112,8 +112,9 @@ export function defineGame(def) {
 // The server never loads such a game's code. The host's browser loads it, calls describeGame(),
 // and sends the result here. Everything in it is untrusted JSON: rebuild it, don't trust it.
 
-const REMOTE_MAX = Object.freeze({ name: 40, description: 200, teams: 8, settings: 32, scoreboard: 8, controls: 16, controlKey: 24, controlText: 40, options: 32, players: 64 });
+const REMOTE_MAX = Object.freeze({ name: 40, description: 200, teams: 8, settings: 32, scoreboard: 8, controls: 16, controlKey: 24, controlText: 40, options: 32, optionValue: 40, players: 64 });
 const SETTING_KEY_RE = /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/;
+const STAT_KEY_RE = /^[A-Za-z0-9_]{1,32}$/;
 const COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
 
 function remoteFail(msg) {
@@ -166,7 +167,8 @@ function remoteSetting(s, i) {
     out.options = options.map((o, j) => {
       const raw = isPlain(o) ? o : { value: o };
       if (!['string', 'number', 'boolean'].includes(typeof raw.value)) remoteFail(`${what} option #${j} needs a text, number or boolean value`);
-      const label = raw.label === undefined || raw.label === null ? String(raw.value) : remoteText(raw.label, `${what} option label`, REMOTE_MAX.name);
+      if (typeof raw.value === 'string' && raw.value.length > REMOTE_MAX.optionValue) remoteFail(`${what} option #${j} is longer than ${REMOTE_MAX.optionValue} characters`);
+      const label = cleanText(raw.label === undefined || raw.label === null ? String(raw.value) : remoteText(raw.label, `${what} option label`, 1000), REMOTE_MAX.name) || String(raw.value).slice(0, REMOTE_MAX.name);
       return { value: raw.value, label };
     });
   }
@@ -197,9 +199,11 @@ export function defineRemoteGame(meta, source) {
   const settings = Object.fromEntries(settingEntries);
 
   const scoreboard = remoteList(meta.scoreboard, 'scoreboard columns', REMOTE_MAX.scoreboard).map((c, i) => {
-    if (!isPlain(c) || typeof c.key !== 'string' || !c.key) remoteFail(`scoreboard column #${i} needs a key`);
-    return { key: remoteText(c.key, 'scoreboard key', 32), label: c.label === undefined || c.label === null ? c.key : remoteText(c.label, 'scoreboard label', 24) };
+    if (!isPlain(c) || typeof c.key !== 'string' || !STAT_KEY_RE.test(c.key)) remoteFail(`scoreboard column #${i} needs a key of 1 to 32 letters, digits or underscores`);
+    const label = c.label === undefined || c.label === null ? c.key : remoteText(c.label, 'scoreboard label', 1000);
+    return { key: c.key, label: cleanText(label, 24) || c.key.slice(0, 24) };
   });
+  if (new Set(scoreboard.map((c) => c.key)).size !== scoreboard.length) remoteFail('scoreboard keys must be unique');
 
   const controls = remoteList(meta.controls, 'controls', REMOTE_MAX.controls).map((pair, i) => {
     if (!Array.isArray(pair) || pair.length !== 2 || typeof pair[0] !== 'string' || typeof pair[1] !== 'string') {
