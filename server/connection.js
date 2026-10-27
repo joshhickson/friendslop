@@ -21,6 +21,9 @@ export class Connection {
     // Generous enough for 60 Hz input plus extras; floods get dropped then disconnected.
     this.bucket = new TokenBucket(120, 240);
     this.chatBucket = new TokenBucket(1, 5);
+    // A host-run game's runner sends a relay per tick and per reply on top of its own input,
+    // so its relays have their own, larger allowance.
+    this.relayBucket = new TokenBucket(480, 960);
     this.floodStrikes = 0;
     this.lastSeen = Date.now();
 
@@ -92,26 +95,36 @@ export class Connection {
   #onMessage(data, isBinary) {
     this.lastSeen = Date.now();
     // ws already refuses anything over MAX_RELAY_BYTES (its maxPayload). Only a `relay` may pass
-    // MAX_MESSAGE_BYTES, and only from the runner of a running match, so nobody else gets a big message parsed.
+    // MAX_MESSAGE_BYTES, and only from a player who may relay, so nobody else gets a big message parsed.
     const big = data.length > LIMITS.MAX_MESSAGE_BYTES;
-    const runner = Boolean(this.player) && this.room?.match?.runnerId === this.player.id;
-    if (isBinary || data.length > LIMITS.MAX_RELAY_BYTES || (big && !runner)) {
+    const relayer = this.#mayRelay();
+    if (isBinary || data.length > LIMITS.MAX_RELAY_BYTES || (big && !relayer)) {
       this.close(1009, 'message too large');
       return;
     }
-    if (!this.bucket.take()) {
-      if (++this.floodStrikes > 200) this.close(1008, 'flooding');
-      return;
-    }
+    // Everyone else is rate limited before parsing. A relayer's message is parsed first, so its
+    // relays can come out of their own bucket.
+    if (!relayer && !this.#takeShared()) return;
     let msg;
     try {
       msg = JSON.parse(data.toString('utf8'));
     } catch {
+      if (relayer && !this.#takeShared()) return;
       return this.error('bad_request');
     }
     if (big && msg?.t !== C2S.RELAY) {
       this.close(1009, 'message too large');
       return;
+    }
+    if (relayer) {
+      if (msg?.t === C2S.RELAY) {
+        if (!this.relayBucket.take()) {
+          this.room.match?.relayDropped?.();
+          return;
+        }
+      } else if (!this.#takeShared()) {
+        return;
+      }
     }
     if (!msg || typeof msg !== 'object' || typeof msg.t !== 'string') return this.error('bad_request');
 
@@ -121,6 +134,19 @@ export class Connection {
       this.log.error('error handling message', msg.t, err);
       this.error('bad_request', 'Server error while handling that request.');
     }
+  }
+
+  #takeShared() {
+    if (this.bucket.take()) return true;
+    if (++this.floodStrikes > 200) this.close(1008, 'flooding');
+    return false;
+  }
+
+  /** The runner of the room's match, or the host of a host-run game's room (a late relay gets bad_phase). */
+  #mayRelay() {
+    const { room, player } = this;
+    if (!room || !player || !room.def?.source) return false;
+    return room.hostId === player.id || room.match?.runnerId === player.id;
   }
 
   #route(msg) {

@@ -14,6 +14,8 @@ import { COPY } from '../shared/copy.js';
 const STAT_TEXT_MAX = 64;
 const TYPE_MAX = 64; // the same cap Connection puts on a player's game message type
 const WINNER_MAX = 64;
+const STAT_KEYS_MAX = 32; // distinct stat keys per player: every snapshot carries them all
+const RELAY_DROPS_MAX = 200; // relays the runner's connection may drop in one match before it ends
 
 const isPlain = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
@@ -34,6 +36,7 @@ export class RemoteMatch {
     this.runnerId = room.hostId; // the host at match start runs the game for everyone
     this.ended = false;
     this.runnerLost = false;
+    this.relayDrops = 0;
     this.startedAt = Date.now();
     this.announceBucket = new TokenBucket(1, 5);
   }
@@ -65,7 +68,7 @@ export class RemoteMatch {
   }
 
   playerGone(player) {
-    if (player.id === this.runnerId) this.#runnerGone();
+    if (player.id === this.runnerId) this.runnerGone();
     if (!this.watchers.delete(player.id) && !this.active.delete(player.id)) return;
     this.#event('leave', { id: player.id });
   }
@@ -139,6 +142,7 @@ export class RemoteMatch {
         if (!p || typeof key !== 'string' || !STAT_KEY_RE.test(key)) return;
         const ok = (typeof value === 'number' && Number.isFinite(value)) || (typeof value === 'string' && value.length <= STAT_TEXT_MAX);
         if (!ok) return;
+        if (!Object.hasOwn(p.stats, key) && Object.keys(p.stats).length >= STAT_KEYS_MAX) return;
         p.stats[key] = value;
         room.markDirty();
         return;
@@ -193,13 +197,27 @@ export class RemoteMatch {
     this.#runner()?.send(S2C.RELAY_EVENT, { ev, ...fields });
   }
 
-  /** The runner's socket closed or it left: nobody is running the game any more. */
-  #runnerGone() {
+  /**
+   * The runner's socket closed, it left, or another connection took its seat: nobody is
+   * running the game any more. Called by playerGone and by Room.attach.
+   */
+  runnerGone() {
     if (this.ended || this.runnerLost) return;
     this.runnerLost = true;
+    this.#endSoon({ text: COPY.hostLeft, error: true });
+  }
+
+  /** The runner's connection dropped a relay over its rate limit. Too many ends the match once. */
+  relayDropped() {
+    if (this.ended || ++this.relayDrops !== RELAY_DROPS_MAX) return;
+    this.log.warn(`runner dropped ${RELAY_DROPS_MAX} relays; ending the match`);
+    this.#endSoon({ text: COPY.gameTooChatty, error: true });
+  }
+
+  #endSoon(result) {
     const room = this.room;
     queueMicrotask(() => {
-      if (!this.ended && room.match === this) room.endMatch({ text: COPY.hostLeft, error: true }, { resultsSeconds: 0 });
+      if (!this.ended && room.match === this) room.endMatch(result, { resultsSeconds: 0 });
     });
   }
 }

@@ -230,6 +230,9 @@ export class Room {
 
   /** Binds a connection to a player (new join or reconnect). */
   attach(player, conn) {
+    // The runner of a host-run game lost its seat (another tab took it, or it reconnected): the
+    // game it was running is gone with the old page.
+    if (player.conn !== conn && this.match?.runnerId === player.id) this.match.runnerGone?.();
     if (player.conn && player.conn !== conn) player.conn.detach('replaced');
     clearTimeout(player.graceTimer);
     player.graceTimer = null;
@@ -467,7 +470,7 @@ export class Room {
       text: cleanText(String(result.text ?? 'Match over.'), 200),
       error: Boolean(result.error),
       teamScores: { ...this.teamScores },
-      stats: Object.fromEntries([...this.players.values()].map((p) => [p.id, { name: p.name, team: p.team, ...p.stats }])),
+      stats: Object.fromEntries([...this.players.values()].map((p) => [p.id, { ...p.stats, name: p.name, team: p.team }])),
       at: Date.now(),
       returnAt: seconds > 0 ? Date.now() + seconds * 1000 : null,
     };

@@ -45,7 +45,7 @@ async function setup(def = metaOf(starter)) {
   const guest = await client();
   guest.send('room:join', { roomId: hw.room.id, password: '', name: 'Guest' });
   const gw = await guest.next((m) => m.t === 'welcome');
-  return { host, guest, hostId: hw.you, guestId: gw.you, roomId: hw.room.id, settings: hw.room.settings };
+  return { host, guest, hostId: hw.you, hostToken: hw.token, guestId: gw.you, roomId: hw.room.id, settings: hw.room.settings };
 }
 
 const isEvent = (ev, pred = () => true) => (m) => m.t === 'relay:event' && m.ev === ev && pred(m);
@@ -131,7 +131,26 @@ test('relay ctx updates the scoreboard', async () => {
   await play(s);
   relay(s.host, [ctx('setStat', s.guestId, 'points', 3), ctx('setTeamScore', 'red', 2)]);
   const r = await s.host.nextRoomWhere((x) => x.teamScores.red === 2);
-  assert.equal(r.players.find((p) => p.id === s.guestId).stats.points, 3);
+  const guest = r.players.find((p) => p.id === s.guestId);
+  assert.equal(guest.stats.points, 3);
+  // Stat keys called name or team never overwrite the player's own in the results.
+  relay(s.host, [ctx('setStat', s.guestId, 'name', 'Evil'), ctx('setStat', s.guestId, 'team', 'green'), ctx('endMatch', { text: 'done' })]);
+  const end = await s.guest.next((m) => m.t === 'match:end');
+  assert.equal(end.result.stats[s.guestId].name, 'Guest');
+  assert.equal(end.result.stats[s.guestId].team, guest.team);
+  assert.equal(end.result.stats[s.guestId].points, 3);
+});
+
+test('a player holds at most 32 stat keys', async () => {
+  const s = await setup();
+  await play(s);
+  relay(s.host, Array.from({ length: 40 }, (_, i) => ctx('setStat', s.guestId, `k${i}`, i)));
+  relay(s.host, [ctx('setStat', s.guestId, 'k0', 99)]);
+  const r = await s.host.nextRoomWhere((x) => x.players.find((p) => p.id === s.guestId).stats.k0 === 99);
+  const stats = r.players.find((p) => p.id === s.guestId).stats;
+  assert.equal(Object.keys(stats).length, 32);
+  assert.equal(stats.k31, 31);
+  assert.equal(stats.k32, undefined);
 });
 
 test('bad relay items are skipped', async () => {
@@ -248,4 +267,55 @@ test('the runner hears team changes, spectating, leaving and the end', async () 
   assert.equal((await s.host.next(isEvent('leave'))).id, s.guestId);
   s.host.send('room:end');
   await s.host.next(isEvent('end'));
+});
+
+test('a runner sending 200 relays a second for 2 s is not dropped or disconnected', async () => {
+  const s = await setup();
+  await play(s);
+  let closed = false;
+  s.host.ws.once('close', () => { closed = true; });
+  // The runner also plays: its own input goes through the shared limit at the same time.
+  for (let tick = 0; tick < 20; tick++) {
+    for (let i = 0; i < 20; i++) relay(s.host, [out('all', 'steady', tick * 20 + i)]);
+    for (let i = 0; i < 10; i++) s.host.game('input', { n: tick * 10 + i });
+    await sleep(100);
+  }
+  await sync(s, 4);
+  assert.equal(s.guest.messages.filter((m) => m.t === 'game' && m.type === 'steady').length, 400);
+  assert.equal(s.host.messages.filter((m) => m.t === 'relay:in' && m.from === s.hostId).length, 200);
+  assert.ok(!s.guest.messages.some((m) => m.t === 'match:end'));
+  assert.equal(closed, false);
+});
+
+test('a runner flooding relays ends the match, not the socket', async () => {
+  const s = await setup();
+  await play(s);
+  for (let i = 0; i < 1500; i++) relay(s.host, [out('all', 'flood', i)]);
+  const end = await s.guest.next((m) => m.t === 'match:end', 5000);
+  assert.equal(end.result.text, COPY.gameTooChatty);
+  assert.equal(end.result.error, true);
+  s.host.send('ping', { c: 1 });
+  await s.host.next((m) => m.t === 'pong');
+  assert.equal(s.guest.messages.filter((m) => m.t === 'match:end').length, 1);
+});
+
+test('the runner seat taken by another connection ends the match', async () => {
+  const s = await setup();
+  await play(s);
+  const again = await client();
+  again.send('room:join', { roomId: s.roomId, token: s.hostToken, resume: true });
+  await again.next((m) => m.t === 'welcome');
+  const end = await s.guest.next((m) => m.t === 'match:end');
+  assert.equal(end.result.text, COPY.hostLeft);
+});
+
+test('a big relay just after the match closed gets bad_phase, and the socket stays open', async () => {
+  const s = await setup();
+  await play(s);
+  s.host.send('room:end');
+  await s.host.next((m) => m.t === 'match:end');
+  relay(s.host, [out('all', 'late', 'x'.repeat(100 * 1024))]);
+  assert.equal((await s.host.next((m) => m.t === 'error')).code, 'bad_phase');
+  s.host.send('ping', { c: 1 });
+  await s.host.next((m) => m.t === 'pong');
 });
