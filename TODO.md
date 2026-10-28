@@ -2,7 +2,7 @@
 
 Open work for friendslop and friendslop.us, newest first. Tick an item off by deleting it.
 
-## Where things stand (handoff, 2026-10-28)
+## Where things stand (handoff, 2026-10-28, after batch 3)
 
 Read this first when picking the work up again.
 
@@ -10,30 +10,50 @@ Read this first when picking the work up again.
   - **friendslop.us** is the site repo `joshhickson/friendslop.us` on GitHub Pages; it goes live on push. Local copy:
     `D:\dev\friendslop-site`, `main` equal to GitHub. Its merged branch `instant-game-links` can be deleted.
   - **play.friendslop.us** is this repo (`joshhickson/friendslop`) on Render's free plan. The Render service is
-    `friendslop`, named `friendslop-2c4h.onrender.com`. It redeploys `main` on every push, and its GitHub app can see this
-    repo only. DNS: a GoDaddy CNAME from `play` to `friendslop-2c4h.onrender.com`. Local copy: `D:\dev\friendslop`, `main`
-    equal to GitHub at 9cc77ae when this was written.
+    `friendslop`, named `friendslop-2c4h.onrender.com`. It redeploys `main` on every push (about a minute), and its
+    GitHub app can see this repo only. DNS: a GoDaddy CNAME from `play` to `friendslop-2c4h.onrender.com`. Local copy:
+    `D:\dev\friendslop`, `main` equal to GitHub at a023383 when this was written.
+- **The session plan of 2026-10-28** (Josh agreed it; four batches, a push after each):
+  1. Done: the slow first host waits up to 45 s with a "still loading" note, the capture bonus flashes on the clock,
+     the starter template is in the Blockout look, and the server logs what compression it got.
+  2. Done: packed messages (see below), live and measured.
+  3. Done: bot matches keep moving, the bonus rule (only captures in the enemy's half add time, Josh approved), and
+     Control Points' 3D world in the Blockout look.
+  4. **Next:** the Docs page on friendslop.us (still "Coming soon"), built from `docs/making-a-game.md`; show Josh
+     the wording before pushing, since the site goes live on push. Add a line about `/ws?z=1` to the site's protocol
+     page while there.
+  - Then housekeeping, asking Josh before each delete: the local tag `backup/pre-strip-2026-10-27`, and the site's
+    merged local branch `instant-game-links`.
 - **The demo:** Control Points (`games/cp` on `games/_shooter`) plays from
   `https://play.friendslop.us/?host=https://github.com/joshhickson/friendslop/tree/main/games/cp`.
-  A full 10 v 10 match with 19 bots ran there on 2026-10-28.
 - **Try it locally** (PowerShell): `cd D:\dev\friendslop`, then
   `$env:DEV_CDN = "1"; $env:GAMES_DIR = "server/no-games"; $env:PORT = "18095"; node server/start.js`, then open
   `http://127.0.0.1:18095/?host=games/cp`. That runs the game the way production does, from the checkout.
-- **Measuring traffic:** join a room from Node with `ws` as a player, send `match:ready`, and compare the text received
-  with `ws._socket.bytesRead` (the bytes on the wire). `/api/health` shows the day's total to 0.1 MB.
+- **Tools kept locally** in `.superpowers/tools/` (not on GitHub):
+  - `sim-cp.mjs`: bot-only Control Points matches on a virtual clock, about 20 s per 15-minute match.
+    `node .superpowers/tools/sim-cp.mjs <matches> <seed> [maxMinutes] [easy|normal|hard]` prints captures, the end, and
+    the longest stretch with no capture. Run several seeds in parallel to compare a change.
+  - `probe-traffic.mjs`: joins a running room as a player and measures what it receives.
+    `MODE=plain|deflate|packed node .superpowers/tools/probe-traffic.mjs <port or https origin> <roomId> <seconds>`.
+    `/api/health` shows the day's total to 0.1 MB.
+- **Testing in a browser:** use Playwright. The desktop app's own browser pane can't run game frames (the frame never
+  starts there). Render's logs are readable in Chrome at the service's Logs page; read them from a screenshot,
+  since page scripts there are blocked.
 - **Local only (not on GitHub):**
-  - This file's latest commits; push them with the next change.
+  - This file's latest commit; push it with the next change.
   - The tag `backup/pre-strip-2026-10-27`.
-  - `.superpowers/` (git-ignored through `.git/info/exclude`): the push-review diffs, and the instant-game-links
-    build ledger with `wording-for-josh.md`.
+  - `.superpowers/` (git-ignored through `.git/info/exclude`): the push-review diffs and screenshots, the tools above,
+    and the instant-game-links build ledger with `wording-for-josh.md`.
   - Nothing is running: no local servers, browser tabs or background jobs were left open.
 - **Waiting on Josh:**
   1. The contact email fix in Cloudflare (his account).
+  2. His hand checks of the demo (see the demo section below).
 - **How Josh works:**
   - Show him the diff before every push. He creates every account.
   - Ask in plain text; no pre-written answer buttons (his ask, 2026-10-28).
-  - Prose: hyphens only, no em or en dashes, no "this, not that" phrasing.
-  - Git on this exFAT drive needs `-c safe.directory=D:/dev/friendslop`.
+  - Prose: hyphens only, no em or en dashes, no "this, not that" phrasing. That includes text players read.
+  - Git on this exFAT drive needs `-c safe.directory=D:/dev/friendslop`, and `-c maintenance.auto=false -c gc.auto=0`
+    avoids a repack permission error.
   - Commits are authored as Josh Hickson `<84687634+joshhickson@users.noreply.github.com>`.
 
 ## Required fix: the contact email doesn't arrive

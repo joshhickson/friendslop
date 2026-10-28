@@ -9,7 +9,8 @@ room link with nothing to host.
 [play.friendslop.us](https://play.friendslop.us). Pull requests welcome ([how](CONTRIBUTING.md)).
 
 **One demo game is included:** Control Points (`games/cp`), a 10 v 10 low-poly shooter that bots fill
-out, built on a shared shooter core (`games/_shooter`). Host it at
+out and play, built on a shared shooter core (`games/_shooter`) and drawn in the website's look.
+Only captures in the enemy's half add time, so a match ends around 15 minutes. Host it at
 [play.friendslop.us](https://play.friendslop.us/?host=https://github.com/joshhickson/friendslop/tree/main/games/cp).
 The alpha is the framework: rooms, the lobby, teams, bots, spectating and hosting. You bring the game.
 `npm run new-game` starts you from a template where everyone is a dot that walks around, and you add
@@ -234,7 +235,7 @@ client/            Browser app: home, lobby, in-match overlay
   frame/           runs inside the sandboxed game frame: boot script, game api, the runner that implements ctx
 shared/            protocol + helpers used on both sides (math, physics, pathfinding, history, timers),
                    the game link parser (gameref.js) and every sentence players read (copy.js)
-games/             one folder per game (starts empty)
+games/             one folder per game: the Control Points demo (cp/) and its shooter core (_shooter/)
 templates/starter/ what `npm run new-game` copies
 scripts/           new-game scaffolder, standalone bot runner
 test/              node:test suites, run with `npm test`
@@ -255,7 +256,9 @@ spectating and team locks, bots (adding and removing, tickets, external bots, pa
 a server with no games, the starter template, and the public-server limits. It also covers games
 shared by link: the relay and every check the server makes on it, the game runner (`ctx` in the host's
 browser) driven against the real server, the frame page and its headers, link parsing, the blocklist
-and the dev CDN.
+and the dev CDN. And it covers compression: WebSocket compression, packed messages (order, size, a
+client that closes mid-stream, a broken stream) and the traffic meter, plus the Control Points map's
+mirror symmetry that the bots rely on.
 
 ## Languages
 
