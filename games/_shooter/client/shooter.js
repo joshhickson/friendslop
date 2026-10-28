@@ -8,7 +8,7 @@
 // A mode mounts it and adds its objective:
 //
 //   const game = mountShooter(api, {
-//     map,                               // { boxes, bounds, sky, ... }
+//     map,                               // { boxes, bounds, sky, edges?, grid?: { color, step }, ambient?, ... }
 //     fog: [near, far],                  // optional view distance
 //     speedMul: () => number,            // optional: local movement multiplier (e.g. flag carrier)
 //     onSnapshot(snap) {},               // objective state from the server's snapshotExtra()
@@ -32,7 +32,10 @@ export function mountShooter(api, mode) {
   camera.far = Math.max(500, (mode.fog?.[1] ?? 140) * 1.2);
   camera.updateProjectionMatrix();
   scene.add(camera);
-  buildBoxWorld(scene, MAP.boxes);
+  // Extra even light for a flat, bright look (map.ambient), so shaded faces don't go muddy.
+  if (MAP.ambient) scene.add(new THREE.AmbientLight('#ffffff', MAP.ambient));
+  buildBoxWorld(scene, MAP.boxes, { edges: MAP.edges ?? null });
+  if (MAP.grid) scene.add(floorGrid(MAP.bounds, MAP.grid));
   const input = new Input(api, stage.canvas);
   const hud = createHud(api);
   const fx = new Effects();
@@ -587,4 +590,16 @@ export function mountShooter(api, mode) {
       delete window.__shooterCam;
     },
   };
+}
+
+/** Lines every `step` units across the floor of `bounds`, like graph paper (map.grid). */
+function floorGrid(bounds, { color, step = 4, y = 0.02 }) {
+  const pts = [];
+  const [x0, , z0] = bounds.min;
+  const [x1, , z1] = bounds.max;
+  for (let x = Math.ceil(x0 / step) * step; x <= x1; x += step) pts.push(x, y, z0, x, y, z1);
+  for (let z = Math.ceil(z0 / step) * step; z <= z1; z += step) pts.push(x0, y, z, x1, y, z);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color }));
 }

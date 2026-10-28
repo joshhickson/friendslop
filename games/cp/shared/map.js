@@ -11,19 +11,22 @@
 // Boxes stand on the floor and never overhang each other, so bots' pathfinding can treat the
 // level as a heightfield. Imports are relative so this file works in Node and in the browser.
 
+// friendslop's Blockout look: a paper-grey floor ruled like graph paper, light blocks outlined in
+// ink, orange crates, and the teams' red and blue on their own walls.
 const C = {
-  ground: '#6f9a5f',
-  path: '#8a9a6a',
-  wall: '#8b909b',
-  stone: '#9a9aa5',
-  stoneDark: '#7d7f8a',
-  step: '#a3a8b3',
-  crate: '#b58a55',
-  crateDark: '#8f6a3e',
-  red: '#d65a5a',
-  redWall: '#b36b6b',
-  blue: '#5a86d6',
-  blueWall: '#6b85b3',
+  ground: '#c9c7be',
+  wall: '#e6e3d9',
+  stone: '#d6d3c9',
+  stoneDark: '#aeaa9f',
+  step: '#efece4',
+  crate: '#f28c28',
+  crateDark: '#c96d1a',
+  red: '#d93a2b',
+  redWall: '#e58a7f',
+  blue: '#2e5bd8',
+  blueWall: '#8aa3ea',
+  ink: '#22201c',
+  grid: '#a29e93',
 };
 
 const boxes = [];
@@ -168,7 +171,10 @@ export const CP_MAP = {
   name: 'Five Gates',
   bounds: { min: [-HX, -5, -HZ], max: [HX, 40, HZ] },
   boxes,
-  sky: '#a8d8ff',
+  sky: '#f3f1ea',
+  edges: C.ink,
+  ambient: 0.7,
+  grid: { color: C.grid, step: 4 },
   colors: C,
   navCell: 0.75,
   // The seven points from Red's end to Blue's. The ends are the bases (owned for good).

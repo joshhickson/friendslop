@@ -71,18 +71,32 @@ cached copy.
 
 ## The Control Points demo, still open
 
-Josh, 2026-10-27: spruce it up and serve it as a working demo with bots that play. Done so far: it runs from a link with
-virtual bots, the unreviewed banner can be closed, the UI is in the Blockout look. Still open:
-- **Stalemates:** in long bot matches the front line tends to stick at point C (from the alpha's own runs).
-- Josh's hand checks, once the demo works to his liking: pointer lock (Esc opens the menu), and the host's tab in
-  the background mid-match.
+Josh, 2026-10-27: spruce it up and serve it as a working demo with bots that play. Done: it runs
+from a link with virtual bots, the unreviewed banner can be closed, the UI and (since 2026-10-28)
+the 3D world are in the Blockout look, and bot matches no longer stall.
+
+The stall, found with a fast-forward simulator of bot-only matches (`.superpowers/tools/sim-cp.mjs`,
+local only: the real game and bot code in the real runner on a virtual clock, 15 minutes in about
+20 seconds). Before: in 8 matches the front stuck at C for 6 to 16 minutes, about 3 captures a
+match, and red won all 8. Three causes, all fixed 2026-10-28:
+- Bots picked their door in each wall from a seed, so the teams spread unevenly; now by team slot.
+- A push waited for 60% of all living teammates at the staging spot, defenders included, so it
+  never filled and always went on the timeout; now it counts attackers only.
+- 4 of 10 bots sat on a point nobody threatened; now 2 do.
+After those, matches swung C back and forth about 45 times and never ended, because every capture
+added a minute. Now only a capture in the enemy's half adds time (Josh to confirm this rule).
+After, 12 normal and 8 easy or hard matches: 17 to 31 captures, all ended between 15:00 and 17:02,
+longest quiet stretch 3:37, red 11, blue 6, draws 3.
+
+Still open: Josh's hand checks once the demo works to his liking: pointer lock (Esc opens the
+menu), and the host's tab in the background mid-match.
 
 ## One look everywhere
 
-Done on 2026-10-28 for the play app (`client/css/style.css`) and the shooter's in-game HUD; both use the website's
-Blockout look and its two typefaces, which this server now hosts in `client/fonts/` for the app and every game frame.
-The starter template's board followed on 2026-10-28. Left: the 3D worlds themselves (grey boxes on a flat green
-floor).
+Done on 2026-10-28: the play app (`client/css/style.css`), the shooter's HUD, the starter template's
+board, and Control Points' 3D world (paper-grey blocks outlined in ink, a graph-paper floor, orange
+crates) all use the website's Blockout look and its two typefaces, which this server hosts in
+`client/fonts/` for the app and every game frame.
 
 ## Before showing friendslop to a real maker
 

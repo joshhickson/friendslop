@@ -108,8 +108,9 @@ export function boxFromAABB(b, color = b.color ?? '#888') {
 /**
  * Builds a static level from an array of AABBs ({ min, max, color }).
  * Boxes sharing a color are merged into one instanced mesh per color for speed.
+ * `edges`: a color to outline every box's edges with (one line mesh for the whole level).
  */
-export function buildBoxWorld(scene, boxes) {
+export function buildBoxWorld(scene, boxes, { edges = null } = {}) {
   const group = new THREE.Group();
   const byColor = new Map();
   for (const b of boxes) {
@@ -120,8 +121,10 @@ export function buildBoxWorld(scene, boxes) {
   }
   const unit = new THREE.BoxGeometry(1, 1, 1);
   const m4 = new THREE.Matrix4();
+  // With outlines, the faces sit a hair behind their edges so the lines don't flicker.
+  const matOpts = edges ? { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 } : {};
   for (const [color, list] of byColor) {
-    const mesh = new THREE.InstancedMesh(unit, flatMat(color), list.length);
+    const mesh = new THREE.InstancedMesh(unit, flatMat(color, matOpts), list.length);
     list.forEach((b, i) => {
       m4.makeScale(b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]);
       m4.setPosition((b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, (b.min[2] + b.max[2]) / 2);
@@ -129,6 +132,21 @@ export function buildBoxWorld(scene, boxes) {
     });
     mesh.instanceMatrix.needsUpdate = true;
     group.add(mesh);
+  }
+  if (edges) {
+    const pts = [];
+    for (const b of boxes) {
+      if (b.invisible) continue;
+      const [x0, y0, z0] = b.min;
+      const [x1, y1, z1] = b.max;
+      // The 12 edges of the box: 4 along x, 4 along y, 4 along z.
+      for (const [y, z] of [[y0, z0], [y1, z0], [y0, z1], [y1, z1]]) pts.push(x0, y, z, x1, y, z);
+      for (const [x, z] of [[x0, z0], [x1, z0], [x0, z1], [x1, z1]]) pts.push(x, y0, z, x, y1, z);
+      for (const [x, y] of [[x0, y0], [x1, y0], [x0, y1], [x1, y1]]) pts.push(x, y, z0, x, y, z1);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    group.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: edges })));
   }
   scene.add(group);
   return group;

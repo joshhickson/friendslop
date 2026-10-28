@@ -11,7 +11,7 @@ export const CAPTURE = {
   maxRate: 3,
   decayPerSecond: 0.1,    // progress lost per second (fraction) when nobody is capturing
   contestHold: true,      // both teams on a point: progress freezes
-  bonusSeconds: 60,       // added to the clock on every capture
+  bonusSeconds: 60,       // added to the clock when a team takes a point that started as the enemy's
   setbackSeconds: 30,     // after losing a point, the team respawns faster for this long...
   setbackRespawnMul: 0.5, // ...at this fraction of the normal wait
   // Attackers need a window to push, so respawn waits scale with how far a team has pushed:

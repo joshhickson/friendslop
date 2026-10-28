@@ -53,12 +53,12 @@ export default defineClientGame({
     for (const p of MAP.points) {
       const g = new THREE.Group();
       g.position.set(p.pos[0], p.pos[1], p.pos[2]);
-      const ringMat = new THREE.MeshBasicMaterial({ color: NEUTRAL, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+      const ringMat = new THREE.MeshBasicMaterial({ color: NEUTRAL, transparent: true, opacity: 0.85, side: THREE.DoubleSide });
       const radius = p.base ? 3 : CAPTURE.radius;
       const ring = new THREE.Mesh(new THREE.RingGeometry(radius - 0.35, radius, 40), ringMat);
       ring.rotation.x = -Math.PI / 2;
       ring.position.y = 0.04;
-      const pole = new THREE.Mesh(new THREE.BoxGeometry(0.15, 5, 0.15), flatMat('#dddddd'));
+      const pole = new THREE.Mesh(new THREE.BoxGeometry(0.15, 5, 0.15), flatMat(INK));
       pole.position.y = 2.5;
       const clothMat = new THREE.MeshLambertMaterial({ color: NEUTRAL, flatShading: true });
       const cloth = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1, 0.06), clothMat);
@@ -68,7 +68,7 @@ export default defineClientGame({
       const prog = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1, 0.08), progMat);
       prog.position.set(0.85, 4.4, 0);
       prog.visible = false;
-      const label = textSprite(p.base ? (p.base === 'red' ? 'RED BASE' : 'BLUE BASE') : p.label, { size: 0.9, bg: 'rgba(0,0,0,0.35)' });
+      const label = textSprite(p.base ? (p.base === 'red' ? 'RED BASE' : 'BLUE BASE') : p.label, { size: 0.9, color: INK, bg: 'rgba(243,241,234,0.9)' });
       label.position.y = 6.1;
       g.add(ring, pole, cloth, prog, label);
       scene.add(g);
@@ -83,7 +83,7 @@ export default defineClientGame({
         const m = markers[i];
         const p = state[i];
         const owner = color(p.o);
-        m.ringMat.color.set(p.x ? (Math.floor(t * 4) % 2 ? '#ffffff' : owner) : owner);
+        m.ringMat.color.set(p.x ? (Math.floor(t * 4) % 2 ? '#f28c28' : owner) : owner); // contested: blinks orange
         m.clothMat.color.set(owner);
         m.prog.visible = p.p > 0.001 && Boolean(p.c);
         if (m.prog.visible) {

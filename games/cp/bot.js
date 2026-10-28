@@ -41,8 +41,9 @@ function chooseObjective(bot) {
   const team = bot.myTeam();
   // Anything actively being captured from us gets extra hands.
   const threatened = defend.filter((i) => pts[i].c && pts[i].c !== team && pts[i].p > 0);
-  // Share of the team that defends: more when a point is being taken, fewer when nothing threatens.
-  const defendShare = !defend.length ? 0 : threatened.length ? 0.6 : attack.length ? 0.35 : 1;
+  // Share of the team that defends: more when a point is being taken, a couple of lookouts when
+  // nothing threatens it (bots camping a quiet point leave too few to push).
+  const defendShare = !defend.length ? 0 : threatened.length ? 0.6 : attack.length ? 0.2 : 1;
   const defenders = Math.round(slot.bots * defendShare);
   const pick = (list, k) => list[k % list.length];
   // Interleave by slot index so attackers and defenders are spread across the roster.
@@ -51,7 +52,7 @@ function chooseObjective(bot) {
   if (attack.length) {
     // Usually every attacker hits the same point (focus beats splitting); C first if it's neutral.
     const neutral = attack.filter((i) => !pts[i].o);
-    return { idx: neutral.length ? neutral[0] : pick(attack, 0), kind: 'attack' };
+    return { idx: neutral.length ? neutral[0] : pick(attack, 0), kind: 'attack', defenders: defend.length ? defenders : 0 };
   }
   if (defend.length) return { idx: pick(defend, order), kind: 'defend' };
   return null;
@@ -67,9 +68,10 @@ function routeVia(bot, target) {
   const between = MAP.gates.filter((g) => g.z > lo + 1 && g.z < hi - 1);
   if (!between.length) return null;
   const gate = z1 > z0 ? between[0] : between[between.length - 1];
-  // Each bot has a favourite door per wall (from its seed), spreading the team over all routes.
-  // (>>> keeps it unsigned: seeds are 32-bit, and >> could make the index negative.)
-  const door = gate.doors[(bot.seed >>> 2) % gate.doors.length];
+  // Each bot takes the door its place in the team gives it, spreading the team evenly over all
+  // routes. The doors are listed mirrored for the two teams, so both spread the same way.
+  const slot = Math.max(0, bot.teamSlot().index);
+  const door = gate.doors[slot % gate.doors.length];
   // Close enough to the door already? Then head straight on.
   if (Math.abs(bot.me.pos[2] - gate.z) < 3) return null;
   return [door[0], bot.nav.floorAt(door[0], door[1]), door[1]];
@@ -103,8 +105,11 @@ function stagingSpot(bot, idx) {
   return [spot[0], bot.nav.floorAt(spot[0], spot[1]), spot[1]];
 }
 
-/** Attack goal for the bot: the staging spot while the team gathers, the point once it pushes. */
-function attackGoal(bot, idx) {
+/**
+ * Attack goal for the bot: the staging spot while the team gathers, the point once it pushes.
+ * `defenders`: how many of the team's bots are holding points, and so never come to stage.
+ */
+function attackGoal(bot, idx, defenders = 0) {
   const team = bot.myTeam();
   const pts = bot.snap.points;
   const target = POINTS[idx].pos;
@@ -117,11 +122,13 @@ function attackGoal(bot, idx) {
     pushes.set(key, push);
   }
   if (bot.time < push.pushingUntil) return target;
-  // Count living teammates near the staging area vs. living teammates in total.
+  // Count living teammates near the staging area vs. the living ones who attack (the defenders
+  // stay on their points, so counting them would make a full gathering impossible).
   const stage = stagingSpot(bot, idx);
   const mates = bot.players().filter((p) => p.alive && p.team === team);
   const staged = mates.filter((p) => Math.hypot(p.pos[0] - stage[0], p.pos[2] - stage[2]) < 12).length;
-  if (staged >= Math.max(2, Math.ceil(mates.length * PUSH_RATIO)) || bot.time - push.stagedAt > STAGE_TIMEOUT) {
+  const attackers = Math.max(1, mates.length - defenders);
+  if (staged >= Math.max(2, Math.ceil(attackers * PUSH_RATIO)) || bot.time - push.stagedAt > STAGE_TIMEOUT) {
     push.pushingUntil = bot.time + PUSH_SECONDS;
     push.stagedAt = bot.time + PUSH_SECONDS; // the next gathering starts after this push
     return target;
@@ -136,7 +143,7 @@ export default createShooterBot({
     const obj = chooseObjective(bot);
     if (!obj) return null;
     bot.objective = obj;
-    const target = obj.kind === 'attack' ? attackGoal(bot, obj.idx) : POINTS[obj.idx].pos;
+    const target = obj.kind === 'attack' ? attackGoal(bot, obj.idx, obj.defenders) : POINTS[obj.idx].pos;
     bot.staging = target !== POINTS[obj.idx].pos;
     const via = routeVia(bot, target);
     if (via && !inEnemySpawn(bot.myTeam(), via)) return via;

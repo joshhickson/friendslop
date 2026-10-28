@@ -54,7 +54,7 @@ export default defineGame({
 
   create(ctx) {
     const { settings } = ctx;
-    let timeLimit = settings.timeLimit * 60; // grows with every capture (bonus time)
+    let timeLimit = settings.timeLimit * 60; // grows with every capture in the enemy's half (bonus time)
     const capRate = 1 / settings.captureSeconds; // progress per second for one player
     let timeUp = false;
     const setbackUntil = { red: -Infinity, blue: -Infinity }; // faster respawns after losing a point
@@ -106,11 +106,14 @@ export default defineGame({
       p.capTeam = null;
       p.progress = 0;
       for (const id of by) ctx.addStat(id, 'captures');
-      timeLimit += CAPTURE.bonusSeconds;
+      // Pushing into the other team's half buys time; trading the middle back and forth doesn't,
+      // or a close match would never run out of clock.
+      const bonus = MAP.points[i].owner && MAP.points[i].owner !== team ? CAPTURE.bonusSeconds : 0;
+      timeLimit += bonus;
       if (prev) setbackUntil[prev] = ctx.time + CAPTURE.setbackSeconds;
       ctx.setTeamScore('red', countOwned('red'));
       ctx.setTeamScore('blue', countOwned('blue'));
-      ctx.broadcast('point', { event: 'captured', id: p.id, team, prev, by, bonus: CAPTURE.bonusSeconds });
+      ctx.broadcast('point', { event: 'captured', id: p.id, team, prev, by, bonus });
       if (countOwned(team) === capIdx.length) {
         const name = ctx.teams.find((t) => t.id === team)?.name ?? team;
         ctx.endMatch({ winner: team, text: `${name} captured every point!` });

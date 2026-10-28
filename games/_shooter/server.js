@@ -346,11 +346,11 @@ export function endOnTime(ctx, scoreOf, label = (n) => String(n)) {
   const r = scoreOf('red');
   const b = scoreOf('blue');
   if (r === b) {
-    ctx.endMatch({ winner: null, text: `Time's up — draw, ${label(r)}–${label(b)}.` });
+    ctx.endMatch({ winner: null, text: `Time's up. It's a draw, ${label(r)} each.` });
   } else {
     const w = r > b ? 'red' : 'blue';
     const name = ctx.teams.find((t) => t.id === w)?.name ?? w;
-    ctx.endMatch({ winner: w, text: `Time's up — ${name} wins ${label(Math.max(r, b))}–${label(Math.min(r, b))}!` });
+    ctx.endMatch({ winner: w, text: `Time's up. ${name} wins, ${label(Math.max(r, b))} to ${label(Math.min(r, b))}!` });
   }
   return true;
 }

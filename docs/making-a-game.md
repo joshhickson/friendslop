@@ -385,7 +385,7 @@ the CDN only, so an asset has to be a file in your repo (under 20 MB).
   Pauses automatically while chat or menus are open.
 - **`sfx`:** synthesized sounds with no asset files: `sfx.play('shoot' | 'hit' | 'hurt' | 'kill' | 'die' | 'pickup' | 'score' | 'alarm' | 'click' | 'jump')`.
   Add your own with `sfx.define(name, { type, freq: [from, to], dur })`.
-- **`three.js` kit:** `createStage` (renderer, scene, camera, lights, resize), `loop`, `buildBoxWorld` (instanced boxes),
+- **`three.js` kit:** `createStage` (renderer, scene, camera, lights, resize), `loop`, `buildBoxWorld` (instanced boxes; `{ edges: color }` outlines them),
   `makeCharacter`, `makeFlag`, `textSprite`, `tracer`, `burst`, `Effects`, `flatMat`, `box`.
 - **Everything in `shared/kit`** (math, physics, `History`, timers) is available here too.
 
