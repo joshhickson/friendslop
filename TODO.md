@@ -19,9 +19,8 @@ Read this first when picking the work up again.
   2. Done: packed messages (see below), live and measured.
   3. Done: bot matches keep moving, the bonus rule (only captures in the enemy's half add time, Josh approved), and
      Control Points' 3D world in the Blockout look.
-  4. **Next:** the Docs page on friendslop.us (still "Coming soon"), built from `docs/making-a-game.md`; show Josh
-     the wording before pushing, since the site goes live on push. Add a line about `/ws?z=1` to the site's protocol
-     page while there.
+  4. Built 2026-10-27, waiting on Josh's OK to push: the Docs page on friendslop.us, the `/ws?z=1` line on the
+     protocol page, and the site review fixes (site commit ab06d70).
   - Then housekeeping, asking Josh before each delete: the local tag `backup/pre-strip-2026-10-27`, and the site's
     merged local branch `instant-game-links`.
 - **The demo:** Control Points (`games/cp` on `games/_shooter`) plays from
@@ -120,8 +119,36 @@ crates) all use the website's Blockout look and its two typefaces, which this se
 
 ## Before showing friendslop to a real maker
 
-- The Docs page on friendslop.us still says "Coming soon". The homepage's "Make your first game"
-  section has the agent prompt and the steps meanwhile.
+- Site review, 2026-10-27: no page said the demo was live or linked to it, the Docs page said
+  "Coming soon", and the games, roadmap, bots, jam and protocol pages were behind. Fixed in site
+  commit ab06d70 (Play the demo button at the top of the homepage, a real Docs page, every page
+  brought up to date, listing a game is an issue everywhere). Local until Josh approves the push.
+- Still open: play.friendslop.us has no demo button. A visitor who goes there directly only sees
+  the link box. Add a "Play the demo" button to its home screen (`client/js/screens/home.js`,
+  wording in `shared/copy.js`).
+- When the platform's guide changes, check the site's Docs page against it: the page summarizes
+  `docs/making-a-game.md` and links there for details.
+
+## Open question: connecting games that already exist
+
+Josh, 2026-10-27: find a way to connect existing games to friendslop more easily.
+
+Today a game has to be a folder in `games/` of a fork of this repo, written around the hooks in
+`server.js` and `client/index.js`. It reaches the kit by relative path (`../../server/kit/index.js`),
+so it only works inside a repo shaped like this one. A game somebody already built elsewhere has to
+move into a fork and be rewritten around those hooks.
+
+Ideas to look into, none decided:
+- Serve the kit from play.friendslop.us so a game imports it from there and can live in any public
+  repo, with no fork.
+- An adapter for games already built on a networking library (Socket.io, Colyseus, PeerJS and the
+  like) that maps the game's own messages onto the room, so its code mostly stays as it is.
+- An embed mode: the existing game runs in the frame and talks to the room through a small message
+  API (who's here, send, receive, score, end), with friendslop's lobby around it.
+- The written protocol spec, so games from other languages and engines (a Godot or Unity web
+  build, say) can join rooms directly.
+- First step: try to connect one or two real open-source browser multiplayer games and write down
+  what got in the way. That shows which of the ideas above matters most.
 
 ## Known, not blocking
 
