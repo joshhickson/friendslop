@@ -12,7 +12,7 @@ Read this first when picking the work up again.
   - **play.friendslop.us** is this repo (`joshhickson/friendslop`) on Render's free plan. The Render service is
     `friendslop`, named `friendslop-2c4h.onrender.com`. It redeploys `main` on every push, and its GitHub app can see this
     repo only. DNS: a GoDaddy CNAME from `play` to `friendslop-2c4h.onrender.com`. Local copy: `D:\dev\friendslop`, `main`
-    equal to GitHub at 5263fe6 when this was written.
+    equal to GitHub at 9cc77ae when this was written.
 - **The demo:** Control Points (`games/cp` on `games/_shooter`) plays from
   `https://play.friendslop.us/?host=https://github.com/joshhickson/friendslop/tree/main/games/cp`.
   A full 10 v 10 match with 19 bots ran there on 2026-10-28.
@@ -52,16 +52,15 @@ there is lost until it's fixed.
 - Test from an address other than the destination. Gmail hides a forwarded copy of a message
   you sent yourself, so a self-test can look like a failure when it worked.
 
-## Check after the next push: packed messages on play.friendslop.us
+## Packed messages: live since 2026-10-28
 
-Render's proxy drops the browser's offer of WebSocket compression on the way in (its log said
-`compression: not offered by the client; agreed: none`, 2026-10-28). So since 2026-10-28 the app
+Render's proxy drops the browser's offer of WebSocket compression on the way in, so the app
 compresses for itself: the browser connects to `/ws?z=1` and the server sends one deflate stream
-per player (`server/packer.js`, unpacked by `client/js/unpack.js`). Locally, in a 10 v 10 Control
-Points match, a packed player received 0.208 MB a minute, the same as with permessage-deflate,
-against 1.70 MB plain. Still to check live: Render's log line should end `packed messages: yes`,
-and `/api/health` should grow by about 0.2 MB a minute per player. At that rate the 150 MB a day
-covers about 700 player-minutes instead of about 90.
+per player (`server/packer.js`, unpacked by `client/js/unpack.js`). Checked live on 2026-10-28 in a
+10 v 10 Control Points match on play.friendslop.us: Render logged `packed messages: yes`, a packed
+probe player received 0.217 MB a minute and a plain one 1.709 MB. At that rate the 150 MB a day
+covers about 700 player-minutes instead of about 90. Not yet tried in Firefox or Safari (both
+support it from Firefox 113 and Safari 16.4; older browsers get plain text).
 
 ## After every push: warm jsDelivr
 
@@ -89,7 +88,6 @@ floor).
 
 - The Docs page on friendslop.us still says "Coming soon". The homepage's "Make your first game"
   section has the agent prompt and the steps meanwhile.
-- Checking packed messages live (above).
 
 ## Known, not blocking
 
