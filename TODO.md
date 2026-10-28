@@ -12,7 +12,7 @@ Read this first when picking the work up again.
   - **play.friendslop.us** is this repo (`joshhickson/friendslop`) on Render's free plan. The Render service is
     `friendslop`, named `friendslop-2c4h.onrender.com`. It redeploys `main` on every push, and its GitHub app can see this
     repo only. DNS: a GoDaddy CNAME from `play` to `friendslop-2c4h.onrender.com`. Local copy: `D:\dev\friendslop`, `main`
-    equal to GitHub at 79853e3 when this was written.
+    equal to GitHub at 5263fe6 when this was written.
 - **The demo:** Control Points (`games/cp` on `games/_shooter`) plays from
   `https://play.friendslop.us/?host=https://github.com/joshhickson/friendslop/tree/main/games/cp`.
   A full 10 v 10 match with 19 bots ran there on 2026-10-28.
@@ -68,9 +68,10 @@ Options, for Josh to pick:
   memory across messages. It needs a protocol version bump and a fallback for clients without `DecompressionStream`.
 - **A compact snapshot format** in `games/_shooter` (measured: about a third of today's size), and/or **fewer
   snapshots** (15 a second down to 10).
-- The server now logs once per run whether the client's offer reached it (`compression: offered by the client;
-  agreed: ...` in Render's logs), which tells apart Cloudflare dropping the offer on the way in from dropping the
-  answer on the way out.
+- **Settled 2026-10-28: the offer is dropped on the way in.** The server logs once per run whether the client's
+  offer reached it. On Render, after a Chromium visit (which always offers compression), it logged
+  `compression: not offered by the client; agreed: none`. So nothing on the server side can turn WebSocket
+  compression on; it has to happen inside the app (Batch 2, Josh agreed 2026-10-28).
 
 ## After every push: warm jsDelivr
 
