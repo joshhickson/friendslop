@@ -48,10 +48,11 @@ DEV_CDN=1 npm start
 ```
 
 On Windows PowerShell, use `$env:DEV_CDN = "1"; npm start`. Then open the home screen and press
-**Try the starter game**. That runs `templates/starter` through the same frame, relay and checks as a
-game from GitHub. The dev CDN only works when the server listens on this machine (`HOST` is loopback).
-A game in your own `games/` folder still runs the old way (on your server) with `npm run play`, which is
-the quickest loop while you write it.
+**Try the starter game**, or type a folder of this checkout, such as `games/my-game`, into the link box
+instead of a GitHub link. That runs the game through the same frame, relay and checks as a game from
+GitHub. The dev CDN only works when the server listens on this machine (`HOST` is loopback).
+`npm run play` still runs a game in your own `games/` folder the old way (on your server), which is the
+quickest loop while you write it.
 
 ### How a game from a link runs
 

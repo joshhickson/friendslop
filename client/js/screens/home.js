@@ -8,7 +8,10 @@ import { parseGithubUrl, formatRef, parseRef, repoKey } from '/shared/gameref.js
 import { resolveCommit, inspectGame } from '../github.js';
 import { confirmFirstLook } from '../unreviewed.js';
 
-const STARTER = `gh:local/friendslop@${'0'.repeat(40)}/templates/starter`;
+const LOCAL = `gh:local/friendslop@${'0'.repeat(40)}/`;
+const STARTER = `${LOCAL}templates/starter`;
+// With the dev CDN, a folder of this checkout (games/cp) can be hosted the way a GitHub link is.
+const LOCAL_FOLDER = /^(games|templates)\/[a-z0-9_-]+\/?$/;
 const DEFAULT_API = 'https://api.github.com';
 
 export function homeScreen(net, { prefillCode = '', preferGame = '', prefillHost = '' } = {}) {
@@ -67,6 +70,11 @@ export function homeScreen(net, { prefillCode = '', preferGame = '', prefillHost
 
   /** From the pasted link to the game's pinned ref: { src } or { text } for the field's error. */
   async function findLink() {
+    const typed = hostLink.value.trim();
+    if (remote.dev && LOCAL_FOLDER.test(typed)) {
+      const src = LOCAL + typed.replace(/\/$/, '');
+      return parseRef(src) ? { src } : { text: COPY.badSource };
+    }
     const link = parseGithubUrl(hostLink.value);
     if (link.error) return { text: COPY.badLink(link.error) };
     const found = await resolveCommit(link, { api: remote.githubApi || DEFAULT_API });
