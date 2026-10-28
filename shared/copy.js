@@ -17,6 +17,7 @@ export const COPY = Object.freeze({
   firstLookPlay: 'Play anyway',
   leaveTheRoom: 'Leave the room',
   reportGame: 'Report this game',
+  hideNotice: 'Hide this notice',
   hostCanCheat: "The host's computer runs the game, so the host could change the score. Choose your friends carefully.",
   hostLeft: 'The host left and took the whole game with them. Bold move. Back to the lobby.',
   dataBudget: "friendslop has used up today's internet. New games can start after midnight UTC. Matches already running can finish.",

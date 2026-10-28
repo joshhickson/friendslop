@@ -5,6 +5,7 @@ import { h } from './dom.js';
 import { COPY } from '/shared/copy.js';
 
 const FIRST_LOOK_PREFIX = 'fs.firstLook.';
+const BANNER_HIDDEN_PREFIX = 'fs.bannerHidden.';
 // The banner's last words are its Report link (COPY.unreviewedBanner ends "Report it").
 const REPORT_TAIL = /report it\.?\s*$/i;
 const MAKER_MARK = '\u0001';
@@ -57,6 +58,24 @@ export function confirmFirstLook(repo, { signal, noLabel = COPY.leaveTheRoom } =
   });
 }
 
+// A closed banner stays closed for that repo until the tab closes, so it doesn't come back every
+// match. The first-look screen, which is the real warning, is still shown once per repo.
+function bannerHidden(repo) {
+  try {
+    return sessionStorage.getItem(BANNER_HIDDEN_PREFIX + repo.toLowerCase()) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function hideBanner(repo) {
+  try {
+    sessionStorage.setItem(BANNER_HIDDEN_PREFIX + repo.toLowerCase(), '1');
+  } catch {
+    // No storage: it comes back next match.
+  }
+}
+
 /** The link to a game folder on GitHub at its pinned commit. */
 function treeUrl(repo, commit, path) {
   return commit && path ? `https://github.com/${repo}/tree/${commit}/${path}` : `https://github.com/${repo}`;
@@ -80,11 +99,13 @@ function reportLink(reportUrl, title, body) {
 /**
  * The strip across the top of an unreviewed game: COPY.unreviewedBanner with the repo as a link
  * to GitHub and its "Report it" as a link to a prefilled GitHub issue, then COPY.hostCanCheat.
- * Every link opens in a new tab.
+ * Every link opens in a new tab. Its close button hides it for that repo until the tab closes.
+ * Returns null when the player already closed it for this repo.
  * @param {{ repo: string, maker: string, reportUrl: string, commit?: string, path?: string }} p
  *   repo is `user/repo` as GitHub spells it; commit and path name the game's folder
  */
 export function unreviewedBanner({ repo, maker, reportUrl, commit = '', path = '' }) {
+  if (bannerHidden(repo)) return null;
   const link = (href, text) => h('a', { href, target: '_blank', rel: 'noopener noreferrer' }, text);
   const report = reportLink(reportUrl, `Report: ${repo}@${commit.slice(0, 7)}`, `${treeUrl(repo, commit, path)}\n\n`);
 
@@ -105,5 +126,18 @@ export function unreviewedBanner({ repo, maker, reportUrl, commit = '', path = '
   }
   // If a rewrite drops the "Report it" ending, the report link still has to be there.
   if (!tail && report) tail = link(report, COPY.reportGame);
-  return h('div.unreviewed', h('div.unreviewed-main', parts, tail), h('div.unreviewed-sub', COPY.hostCanCheat));
+  let banner = null;
+  const close = h('button.unreviewed-close', {
+    type: 'button',
+    'aria-label': COPY.hideNotice,
+    title: COPY.hideNotice,
+    onclick: () => {
+      hideBanner(repo);
+      banner.remove();
+      // The game fills the space the banner left; three.js games size from a resize event.
+      window.dispatchEvent(new Event('resize'));
+    },
+  }, '×');
+  banner = h('div.unreviewed', close, h('div.unreviewed-main', parts, tail), h('div.unreviewed-sub', COPY.hostCanCheat));
+  return banner;
 }
