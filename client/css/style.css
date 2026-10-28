@@ -95,6 +95,8 @@ h2 { font: 400 20px/1.15 var(--display); }
 
 .home { width: min(480px, 100%); }
 .home .panel { padding: 24px; }
+.home-foot { margin: 14px 0 0; text-align: center; }
+.home-foot a { color: inherit; }
 
 /* ---------- lobby ---------- */
 .lobby { width: min(1100px, 100%); display: grid; grid-template-columns: 1fr 320px; gap: 20px; align-items: start; }

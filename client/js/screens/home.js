@@ -186,7 +186,8 @@ export function homeScreen(net, { prefillCode = '', preferGame = '', prefillHost
       h('label.field', 'Name', name),
       h('div.spacer'),
       tabs,
-      body)),
+      body),
+    h('p.muted.small.home-foot', h('a', { href: 'https://friendslop.us/privacy/', target: '_blank', rel: 'noopener' }, 'Privacy'))),
     inspectBox);
 
   setTimeout(() => {

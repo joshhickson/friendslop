@@ -19,7 +19,7 @@ Read this first when picking the work up again.
   2. Done: packed messages (see below), live and measured.
   3. Done: bot matches keep moving, the bonus rule (only captures in the enemy's half add time, Josh approved), and
      Control Points' 3D world in the Blockout look.
-  4. Built 2026-10-27, waiting on Josh's OK to push: the Docs page on friendslop.us, the `/ws?z=1` line on the
+  4. Done 2026-10-27, live: the Docs page on friendslop.us, the `/ws?z=1` line on the
      protocol page, and the site review fixes (site commit ab06d70).
   - Then housekeeping, asking Josh before each delete: the local tag `backup/pre-strip-2026-10-27`, and the site's
     merged local branch `instant-game-links`.
@@ -122,7 +122,7 @@ crates) all use the website's Blockout look and its two typefaces, which this se
 - Site review, 2026-10-27: no page said the demo was live or linked to it, the Docs page said
   "Coming soon", and the games, roadmap, bots, jam and protocol pages were behind. Fixed in site
   commit ab06d70 (Play the demo button at the top of the homepage, a real Docs page, every page
-  brought up to date, listing a game is an issue everywhere). Local until Josh approves the push.
+  brought up to date, listing a game is an issue everywhere). Live since 2026-10-27.
 - Still open: play.friendslop.us has no demo button. A visitor who goes there directly only sees
   the link box. Add a "Play the demo" button to its home screen (`client/js/screens/home.js`,
   wording in `shared/copy.js`).
