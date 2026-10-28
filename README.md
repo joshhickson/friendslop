@@ -8,9 +8,16 @@ room link with nothing to host.
 **Status: alpha.** Teaser and roadmap: [friendslop.us](https://friendslop.us). Play at
 [play.friendslop.us](https://play.friendslop.us). Pull requests welcome ([how](CONTRIBUTING.md)).
 
-**One demo game is included:** Control Points (`games/cp`), a 10 v 10 low-poly shooter that bots fill
-out, built on a shared shooter core (`games/_shooter`). Host it at
-[play.friendslop.us](https://play.friendslop.us/?host=https://github.com/joshhickson/friendslop/tree/main/games/cp).
+**Two demo games are included:**
+
+- **Control Points** (`games/cp`), a 10 v 10 low-poly shooter that bots fill out, built on a shared
+  shooter core (`games/_shooter`). Host it at
+  [play.friendslop.us](https://play.friendslop.us/?host=https://github.com/joshhickson/friendslop/tree/main/games/cp).
+- **Reality Check** (`games/reality-check`), a turn-based satirical board game about modern adult life
+  for 1 to 6 players plus bots: pick a ring of the Chaos Circle, roll, face Sin, Virtue and Chaos cards,
+  survive Babel's town-wide events, and get judged on Judgment Day. Host it at
+  [play.friendslop.us](https://play.friendslop.us/?host=https://github.com/joshhickson/friendslop/tree/main/games/reality-check).
+
 The alpha is the framework: rooms, the lobby, teams, bots, spectating and hosting. You bring the game.
 `npm run new-game` starts you from a template where everyone is a dot that walks around, and you add
 the rules. To play it with friends, push it to a public GitHub fork and
