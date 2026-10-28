@@ -32,8 +32,8 @@ export default defineGame({
   maxPlayers: 20,
   tickRate: 30,
   teams: [
-    { id: 'red', name: 'Red', color: '#e5484d' },
-    { id: 'blue', name: 'Blue', color: '#3e8ef7' },
+    { id: 'red', name: 'Red', color: '#d93a2b' },
+    { id: 'blue', name: 'Blue', color: '#2e5bd8' },
   ],
   settings: {
     timeLimit: { label: 'Time limit', default: 15, min: 3, max: 60, unit: 'min' },

@@ -32,6 +32,9 @@ ink on light panels), as of the site commit a9bcf76.
 - Restyle the play app (`client/css/style.css`, the lobby, the home screen, the match HUD and
   the unreviewed banner) to match Blockout, so going from the website to a room feels like one
   place.
+- Josh, 2026-10-28, after playing the Control Points demo: the UI in the game doesn't match the
+  website either. Restyle the shooter's in-game HUD (`games/_shooter/client/hud.js`: point bar,
+  health, ammo, kill feed) to Blockout too.
 - Games draw their own screens; the starter template's colours can follow later.
 
 ## Before showing friendslop to a real maker

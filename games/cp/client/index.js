@@ -9,22 +9,26 @@ import { mountShooter } from '../../_shooter/client/shooter.js';
 import { CP_MAP as MAP } from '../shared/map.js';
 import { CAPTURE } from '../shared/constants.js';
 
-const NEUTRAL = '#d9d9d9';
+const NEUTRAL = '#a8a49a';
+const INK = '#22201c';
 
+// friendslop's Blockout look, to match the shooter HUD (games/_shooter/client/hud.js).
 const CSS = `
 .cp-bar { display:flex; gap:6px; align-items:center; }
 .cp-pt { position:relative; width:46px; height:46px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-  font-weight:900; font-size:18px; border:3px solid rgba(0,0,0,.55); background:var(--o); color:#fff; text-shadow:0 1px 2px #000; overflow:hidden; }
-.cp-pt.base { width:30px; height:30px; font-size:11px; opacity:.85; border-radius:8px; }
-.cp-pt .fill { position:absolute; left:0; bottom:0; width:100%; background:var(--c); opacity:.85; }
+  font:400 18px Bungee,system-ui,sans-serif; border:3px solid ${INK}; background:var(--o); color:#fff; text-shadow:1px 1px 0 ${INK};
+  box-shadow:2px 2px 0 ${INK}; overflow:hidden; }
+.cp-pt.base { width:30px; height:30px; font-size:11px; border-radius:8px; }
+.cp-pt .fill { position:absolute; left:0; bottom:0; width:100%; background:var(--c); opacity:.9; }
 .cp-pt span { position:relative; }
-.cp-pt.locked { filter:saturate(.5) brightness(.85); }
-.cp-pt.target { box-shadow:0 0 0 3px #fff, 0 0 14px #fff; }
+.cp-pt.locked { filter:saturate(.45); }
+.cp-pt.target { box-shadow:0 0 0 3px #f28c28, 3px 3px 0 3px ${INK}; }
 .cp-pt.contested { animation:cpblink .5s steps(2) infinite; }
 .cp-pt .lock { position:absolute; right:1px; top:-1px; font-size:11px; }
-@keyframes cpblink { 50% { border-color:#fff; } }
-.cp-cap { position:absolute; left:50%; top:60%; transform:translateX(-50%); width:280px; text-align:center; font-weight:800; font-size:15px; display:none; }
-.cp-cap .track { height:12px; margin-top:4px; border-radius:6px; background:rgba(0,0,0,.5); border:1px solid rgba(255,255,255,.5); overflow:hidden; }
+@keyframes cpblink { 50% { border-color:#f28c28; } }
+.cp-cap { position:absolute; left:50%; top:60%; transform:translateX(-50%); width:300px; text-align:center; font-weight:800; font-size:15px; display:none;
+  background:#f3f1ea; color:${INK}; border:3px solid ${INK}; border-radius:10px; box-shadow:3px 3px 0 ${INK}; padding:6px 10px 8px; text-shadow:none; }
+.cp-cap .track { height:12px; margin-top:5px; border-radius:6px; background:#e6e3d9; border:2px solid ${INK}; overflow:hidden; }
 .cp-cap .bar { height:100%; width:0; }
 `;
 
@@ -143,7 +147,7 @@ export default defineClientGame({
           } else if (!p.ok[t]) {
             const need = MAP.points[i + (team === 'red' ? -1 : 1)]?.label;
             text = `${meta.label} is locked: capture ${need} first`;
-            c = '#999';
+            c = '#8a867c';
           } else if (p.x) {
             text = `${meta.label} contested!`;
           } else {
@@ -179,7 +183,7 @@ export default defineClientGame({
     api.on('hurt', ({ zone }) => {
       if (!zone) return;
       zoneWarnUntil = performance.now() + 700;
-      hud.banner('Enemy spawn room: get out!', '#ff6b6b');
+      hud.banner('Enemy spawn room: get out!', '#d93a2b');
     });
     const bannerTimer = setInterval(() => {
       if (zoneWarnUntil && performance.now() > zoneWarnUntil) {

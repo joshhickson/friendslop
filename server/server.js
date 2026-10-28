@@ -94,7 +94,7 @@ function mounts({ gamesDir, devCdn }) {
 }
 
 /** Routes whose files the sandboxed frame (opaque origin) loads, so any origin may read them. */
-const CROSS_ORIGIN_PREFIXES = ['/frame/', '/dev-cdn/', '/vendor/', '/shared/'];
+const CROSS_ORIGIN_PREFIXES = ['/frame/', '/dev-cdn/', '/vendor/', '/shared/', '/client/fonts/'];
 
 /**
  * WebSocket compression (permessage-deflate). Each connection's compressor keeps a window of what it

@@ -99,10 +99,11 @@ export function renderFrame(req, config, { cdn, three }) {
     "default-src 'none'",
     // friendslop's own frame code (boot, runner) imports /shared/protocol.js and /shared/copy.js.
     `script-src ${play}/frame/ ${play}/shared/ ${content} 'nonce-${nonce}'`,
-    `style-src 'unsafe-inline' ${content}`,
+    // friendslop's own fonts (client/fonts/fonts.css) are open to every game.
+    `style-src 'unsafe-inline' ${content} ${play}/client/fonts/`,
     `img-src ${content} data: blob:`,
     `media-src ${content} data: blob:`,
-    `font-src ${content}`,
+    `font-src ${content} ${play}/client/fonts/`,
     `connect-src ${content}`,
     // The host's runner is a blob: classic worker (see boot.js); a blob: module worker cannot start
     // from an opaque origin.
@@ -116,8 +117,9 @@ export function renderFrame(req, config, { cdn, three }) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Game</title>
+<link rel="stylesheet" href="${play}/client/fonts/fonts.css">
 <style>
-html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; color: #e8ecf3; font: 14px system-ui, sans-serif; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; color: #e8ecf3; font: 14px "Bricolage Grotesque", system-ui, sans-serif; }
 #root { position: absolute; inset: 0; }
 #hud { position: absolute; inset: 0; pointer-events: none; }
 #hud .interactive { pointer-events: auto; }
