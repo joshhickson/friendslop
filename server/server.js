@@ -242,6 +242,7 @@ export async function createGameServer(config, { log = createLogger(config.logLe
   const perIp = new Map();
   let players = 0; // connections other than the server's own bots
   let proxyHeadersLogged = false;
+  let compressionLogged = false;
 
   httpServer.on('upgrade', (req, socket, head) => {
     const reject = (code, text) => {
@@ -272,6 +273,13 @@ export async function createGameServer(config, { log = createLogger(config.logLe
     wss.handleUpgrade(req, socket, head, (ws) => {
       perIp.set(ip, (perIp.get(ip) ?? 0) + 1);
       if (!internalBot) players++;
+      if (!internalBot && !compressionLogged) {
+        // Once per run: did the client's offer of compression reach us, and did we agree? A proxy can
+        // drop the offer on the way in or the answer on the way out; this tells the two apart.
+        compressionLogged = true;
+        const offered = /permessage-deflate/i.test(String(req.headers['sec-websocket-extensions'] ?? ''));
+        log.info(`compression: ${offered ? 'offered' : 'not offered'} by the client; agreed: ${ws.extensions || 'none'}`);
+      }
       ws.on('close', () => {
         const n = (perIp.get(ip) ?? 1) - 1;
         if (n <= 0) perIp.delete(ip);

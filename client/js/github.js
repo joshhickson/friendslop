@@ -7,7 +7,9 @@ import { COPY } from '../../shared/copy.js';
 
 const COMMIT_RE = /^[0-9a-f]{40}$/;
 const GITHUB_MS = 10_000;
-const INSPECT_MS = 15_000;
+// A game at a newly pushed commit is fetched by jsDelivr for the first time, which can take a while.
+const INSPECT_MS = 45_000;
+const SLOW_MS = 15_000;
 
 /**
  * Finds the commit a pasted link points at. A 40-hex revision is the commit already and costs no
@@ -36,7 +38,7 @@ export async function resolveCommit({ user, repo, rev }, { api, fetch = globalTh
 
 /**
  * Runs the game's server.js in a hidden inspect frame and reads what it says about itself (the
- * description a room is made from). Gives up after 15 s.
+ * description a room is made from). Calls onSlow after 15 s and gives up after 45 s.
  * @param {string} src                      the game's gh: ref
  * @param {object} o
  * @param {HTMLElement} o.container         where the hidden frame goes
@@ -44,9 +46,10 @@ export async function resolveCommit({ user, repo, rev }, { api, fetch = globalTh
  * @param {object} o.store                  client/js/state.js's store
  * @param {AbortSignal} [o.signal]          abort to tear the frame down (the screen went away)
  * @param {number} [o.timeoutMs]
+ * @param {() => void} [o.onSlow]           called once if the game is still loading after 15 s
  * @returns {Promise<{ meta: object, kitVersion: number | null } | { error: string }>}  error is player-facing text
  */
-export async function inspectGame(src, { container, net, store, signal, timeoutMs = INSPECT_MS }) {
+export async function inspectGame(src, { container, net, store, signal, timeoutMs = INSPECT_MS, onSlow }) {
   if (signal?.aborted) return { error: COPY.badLink('timeout') };
   const { mountGameFrame } = await import('./frame-host.js');
   return new Promise((resolve) => {
@@ -56,12 +59,14 @@ export async function inspectGame(src, { container, net, store, signal, timeoutM
       if (done) return;
       done = true;
       clearTimeout(timer);
+      clearTimeout(slow);
       signal?.removeEventListener('abort', onAbort);
       frame?.destroy();
       resolve(result);
     };
     const onAbort = () => finish({ error: COPY.badLink('timeout') });
-    const timer = setTimeout(() => finish({ error: COPY.badLink('timeout') }), timeoutMs);
+    const timer = setTimeout(() => finish({ error: COPY.gameSlow }), timeoutMs);
+    const slow = onSlow && timeoutMs > SLOW_MS ? setTimeout(onSlow, SLOW_MS) : null;
     signal?.addEventListener('abort', onAbort);
     try {
       frame = mountGameFrame({

@@ -29,8 +29,7 @@ Read this first when picking the work up again.
   - Nothing is running: no local servers, browser tabs or background jobs were left open.
 - **Waiting on Josh:**
   1. Which way to cut live traffic, now that WebSocket compression is stripped by Render's proxy (see below).
-  2. How to handle the first host after a push timing out (see below).
-  3. The contact email fix in Cloudflare (his account).
+  2. The contact email fix in Cloudflare (his account).
 - **How Josh works:**
   - Show him the diff before every push. He creates every account.
   - Ask in plain text; no pre-written answer buttons (his ask, 2026-10-28).
@@ -69,22 +68,22 @@ Options, for Josh to pick:
   memory across messages. It needs a protocol version bump and a fallback for clients without `DecompressionStream`.
 - **A compact snapshot format** in `games/_shooter` (measured: about a third of today's size), and/or **fewer
   snapshots** (15 a second down to 10).
-- First, find out whether Cloudflare drops the offer on the way in or the answer on the way out: log once per run
-  whether the upgrade request carried `sec-websocket-extensions`, as the server already does for proxy headers.
+- The server now logs once per run whether the client's offer reached it (`compression: offered by the client;
+  agreed: ...` in Render's logs), which tells apart Cloudflare dropping the offer on the way in from dropping the
+  answer on the way out.
 
-## Next: the first host after a push times out
+## After every push: warm jsDelivr
 
-The first "Host this game" for a newly pushed commit failed on 2026-10-28 with "GitHub took so long to answer...".
-GitHub answered at once; the game's files were slow because jsDelivr was fetching that commit for the first time. The
-second try worked. Every push to the demo will do this to its first visitor. Ideas: a longer wait for the hidden check
-with a "still loading the game" line, and/or fetching the demo's files once right after each push to warm jsDelivr.
+The first visit to a newly pushed commit makes jsDelivr fetch the game's files for the first time, which took long
+enough on 2026-10-28 that the host form gave up. Since 2026-10-28 the form says "Still loading the game..." after 15 s
+and waits up to 45 s. After pushing a change to a game, still open the demo link once yourself so a visitor gets the
+cached copy.
 
 ## The Control Points demo, still open
 
 Josh, 2026-10-27: spruce it up and serve it as a working demo with bots that play. Done so far: it runs from a link with
 virtual bots, the unreviewed banner can be closed, the UI is in the Blockout look. Still open:
 - **Stalemates:** in long bot matches the front line tends to stick at point C (from the alpha's own runs).
-- **The match clock read 15:36** soon after starting a 15-minute match. Not looked into.
 - Josh's hand checks, once the demo works to his liking: pointer lock (Esc opens the menu), and the host's tab in
   the background mid-match.
 
@@ -92,13 +91,14 @@ virtual bots, the unreviewed banner can be closed, the UI is in the Blockout loo
 
 Done on 2026-10-28 for the play app (`client/css/style.css`) and the shooter's in-game HUD; both use the website's
 Blockout look and its two typefaces, which this server now hosts in `client/fonts/` for the app and every game frame.
-Left: the starter template's colours, and the 3D worlds themselves (grey boxes on a flat green floor).
+The starter template's board followed on 2026-10-28. Left: the 3D worlds themselves (grey boxes on a flat green
+floor).
 
 ## Before showing friendslop to a real maker
 
 - The Docs page on friendslop.us still says "Coming soon". The homepage's "Make your first game"
   section has the agent prompt and the steps meanwhile.
-- The two "Next" items above (traffic and the first-host timeout).
+- The traffic item above.
 
 ## Known, not blocking
 
@@ -111,3 +111,5 @@ Left: the starter template's colours, and the 3D worlds themselves (grey boxes o
 - A game's `announce` lines look like friendslop's own system chat (Josh's call).
 - `/api/health` counts virtual bots as players.
 - Delete the local tag `backup/pre-strip-2026-10-27` once the pushed history looks right.
+- The match clock can read more than the time limit: every capture adds a minute (`CAPTURE.bonusSeconds`). Since
+  2026-10-28 the HUD flashes "+1:00" under the timer when it happens.

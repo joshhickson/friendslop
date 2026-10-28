@@ -164,7 +164,7 @@ export default defineClientGame({
     }
 
     // ---------- events ----------
-    api.on('point', ({ event, id, team, prev, by }) => {
+    api.on('point', ({ event, id, team, prev, by, bonus }) => {
       const meta = MAP.points.find((p) => p.id === id);
       const mine = game.myTeam();
       const names = (by ?? []).slice(0, 3).map((pid) => hud.nameOf(pid)).join(', ') + ((by?.length ?? 0) > 3 ? '…' : '');
@@ -172,6 +172,7 @@ export default defineClientGame({
         hud.feed([span(hud.teamName(team), color(team)), ` captured ${meta.label}`, names ? ` (${names})` : '']);
         hud.announce(team === mine ? `We took ${meta.label}!` : `${meta.label} was lost!`, color(team), 2200);
         sfx.play(team === mine ? 'score' : 'alarm', { volume: 0.5 });
+        if (bonus) hud.timeBonus(bonus);
       } else if (event === 'neutralized') {
         hud.feed([span(hud.teamName(team), color(team)), ` neutralized ${meta.label}`]);
         if (prev === mine) hud.announce(`${meta.label} is being taken!`, color(team), 1800);

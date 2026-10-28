@@ -38,6 +38,8 @@ const CSS = `
 .sh-ammo small { font:800 14px "Bricolage Grotesque",system-ui,sans-serif; opacity:.7; }
 .sh-objective { position:absolute; top:62px; left:50%; transform:translateX(-50%); display:flex; gap:10px; font-size:13px; font-weight:800; align-items:center; }
 .sh-timer { ${CHIP} position:absolute; top:12px; right:16px; font:400 22px/1 ${DISPLAY}; padding:7px 12px; }
+.sh-bonus { ${CHIP} position:absolute; top:56px; right:16px; font:400 16px/1 ${DISPLAY}; padding:5px 9px; background:${ACCENT}; opacity:0; transform:translateY(-6px); transition:opacity .6s, transform .6s; }
+.sh-bonus.show { opacity:1; transform:none; transition:opacity .15s, transform .15s; }
 .sh-feed { position:absolute; top:12px; left:16px; display:flex; flex-direction:column; align-items:flex-start; gap:5px; font-size:14px; font-weight:800; }
 .sh-feed div { ${CHIP} border-width:2px; box-shadow:2px 2px 0 ${INK}; padding:2px 9px; border-radius:8px; transition:opacity .5s; }
 .sh-center { position:absolute; left:50%; top:28%; transform:translateX(-50%); text-align:center; font-size:22px; font-weight:800; text-shadow:2px 2px 0 ${INK}; }
@@ -69,6 +71,7 @@ export function createHud(api) {
   const ammo = h('div.sh-ammo');
   const objective = h('div.sh-objective');
   const timer = h('div.sh-timer');
+  const bonus = h('div.sh-bonus');
   const feed = h('div.sh-feed');
   const center = h('div.sh-center');
   const dmg = h('div.sh-dmg');
@@ -81,7 +84,7 @@ export function createHud(api) {
   const root = h('div.sh-hud',
     style, dead, dmg,
     h('div.sh-cross', h('div.dot')), hitmark,
-    timer, feed, objective, center, banner, clickHint, spec,
+    timer, bonus, feed, objective, center, banner, clickHint, spec,
     h('div.sh-bottom', h('div.sh-hp', hpNum, h('div.bar', hpFill)), ammo));
   const key = (k) => h('b', k);
   api.hud.append(root);
@@ -89,6 +92,7 @@ export function createHud(api) {
   let hitTimer = 0;
   let dmgTimer = 0;
   let centerTimer = 0;
+  let bonusTimer = 0;
 
   const nameOf = (id) => api.player(id)?.name ?? '???';
   const colorOf = (id) => api.teamColor(api.player(id)?.team);
@@ -107,6 +111,13 @@ export function createHud(api) {
     setTime(seconds) {
       timer.textContent = fmtTime(seconds);
       timer.style.color = seconds <= 30 ? BAD : INK;
+    },
+    /** Shows "+1:00" under the timer for a moment, so time added to the clock doesn't look like a glitch. */
+    timeBonus(seconds) {
+      bonus.textContent = `+${fmtTime(seconds)}`;
+      bonus.classList.add('show');
+      clearTimeout(bonusTimer);
+      bonusTimer = setTimeout(() => bonus.classList.remove('show'), 2500);
     },
     /** Persistent hint line above the health bar (e.g. "You have the flag!"). Pass null to hide. */
     banner(text, color = INK) {

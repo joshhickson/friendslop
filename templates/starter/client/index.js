@@ -2,7 +2,13 @@
 
 import { defineClientGame, Input, h } from '/client/kit/index.js';
 
-const COLORS = ['#ff5a5f', '#4aa3ff', '#4cd97b', '#ffcc33', '#c77dff', '#ff9f43', '#2ee6d6', '#ff6bcb'];
+// friendslop's Blockout look: a light board with ink edges on a grey grid. Change any of it.
+const BG = '#c9c7be';
+const BOARD = '#f3f1ea';
+const GRID = '#e2dfd5';
+const INK = '#22201c';
+const ACCENT = '#f28c28';
+const COLORS = ['#d93a2b', '#2e5bd8', '#2f8f4e', '#e8b923', '#7b4bc4', '#f28c28', '#1f9aa0', '#d6458f'];
 
 export default defineClientGame({
   mount(api) {
@@ -16,7 +22,7 @@ export default defineClientGame({
 
     api.on('state', (s) => { state = s; });
 
-    const colorFor = (id) => COLORS[api.players().findIndex((p) => p.id === id) % COLORS.length] ?? '#fff';
+    const colorFor = (id) => COLORS[api.players().findIndex((p) => p.id === id) % COLORS.length] ?? INK;
 
     function frame() {
       raf = requestAnimationFrame(frame);
@@ -30,28 +36,39 @@ export default defineClientGame({
 
       const w = (canvas.width = canvas.clientWidth * devicePixelRatio);
       const hh = (canvas.height = canvas.clientHeight * devicePixelRatio);
-      g.fillStyle = '#1b1f27';
+      g.fillStyle = BG;
       g.fillRect(0, 0, w, hh);
       if (!state) return;
       const scale = Math.min(w, hh) / state.size * 0.9;
       g.save();
       g.translate((w - state.size * scale) / 2, (hh - state.size * scale) / 2);
       g.scale(scale, scale);
-      g.fillStyle = '#262b36';
+      g.fillStyle = INK;
+      g.fillRect(0.3, 0.3, state.size, state.size); // the hard offset shadow
+      g.fillStyle = BOARD;
       g.fillRect(0, 0, state.size, state.size);
-      g.font = '1px system-ui';
+      g.strokeStyle = GRID;
+      g.lineWidth = 0.05;
+      for (let i = 1; i < state.size; i++) {
+        g.beginPath();
+        g.moveTo(i, 0); g.lineTo(i, state.size);
+        g.moveTo(0, i); g.lineTo(state.size, i);
+        g.stroke();
+      }
+      g.strokeStyle = INK;
+      g.lineWidth = 0.15;
+      g.strokeRect(0, 0, state.size, state.size);
+      g.font = '800 1px "Bricolage Grotesque", system-ui, sans-serif';
       g.textAlign = 'center';
       for (const p of state.players) {
         g.fillStyle = colorFor(p.id);
         g.beginPath();
         g.arc(p.x, p.y, 0.6, 0, Math.PI * 2);
         g.fill();
-        if (p.id === api.me) {
-          g.strokeStyle = '#fff';
-          g.lineWidth = 0.15;
-          g.stroke();
-        }
-        g.fillStyle = '#fff';
+        g.strokeStyle = p.id === api.me ? ACCENT : INK;
+        g.lineWidth = p.id === api.me ? 0.25 : 0.12;
+        g.stroke();
+        g.fillStyle = INK;
         g.fillText(api.player(p.id)?.name ?? '', p.x, p.y - 1);
       }
       g.restore();

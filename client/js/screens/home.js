@@ -52,6 +52,7 @@ export function homeScreen(net, { prefillCode = '', preferGame = '', prefillHost
   const hostLink = h('input', { type: 'text', maxLength: 300, placeholder: COPY.hostPlaceholder, value: prefillHost, autocomplete: 'off', spellcheck: false });
   const hostPw = h('input', { type: 'password', maxLength: LIMITS.PASSWORD_MAX, placeholder: COPY.noPasswordPlaceholder, autocomplete: 'new-password' });
   const hostError = h('p.form-error', { role: 'alert' });
+  const hostNote = h('p.muted.small', { role: 'status' });
   const hostButton = h('button.btn.primary', { type: 'submit' }, COPY.hostButton);
   const starterButton = remote.dev ? h('button.btn', { type: 'button', onclick: () => hostFrom(async () => ({ src: STARTER })) }, COPY.hostStarter) : null;
   const inspectBox = h('div.inspect-host');
@@ -66,6 +67,14 @@ export function homeScreen(net, { prefillCode = '', preferGame = '', prefillHost
     hostButton.disabled = on;
     if (starterButton) starterButton.disabled = on;
     hostButton.textContent = on ? COPY.hostChecking : COPY.hostButton;
+    hostNote.textContent = '';
+  }
+
+  /** The game is taking its time to load: say so, so nobody gives up on a working link. */
+  function stillLoading() {
+    if (gone || !busy) return;
+    hostButton.textContent = COPY.hostStillLoading;
+    hostNote.textContent = COPY.hostSlowHint;
   }
 
   /** From the pasted link to the game's pinned ref: { src } or { text } for the field's error. */
@@ -104,7 +113,7 @@ export function homeScreen(net, { prefillCode = '', preferGame = '', prefillHost
       const yes = await confirmFirstLook(repoKey(found.src), { signal: abort.signal, noLabel: COPY.firstLookNotNow });
       if (gone) return;
       if (!yes) return setBusy(false);
-      const seen = await inspectGame(found.src, { container: inspectBox, net, store, signal: abort.signal });
+      const seen = await inspectGame(found.src, { container: inspectBox, net, store, signal: abort.signal, onSlow: stillLoading });
       if (gone) return;
       if (seen.error) return fail(seen.error);
       const create = { t: C2S.CREATE, name: n, password: hostPw.value, source: found.src, def: seen.meta };
@@ -133,6 +142,7 @@ export function homeScreen(net, { prefillCode = '', preferGame = '', prefillHost
       h('label.field', COPY.hostLinkLabel, hostLink),
       h('label.field', COPY.passwordLabel, hostPw),
       hostError,
+      hostNote,
       h('div.row.wrap', hostButton, starterButton));
   }
 
