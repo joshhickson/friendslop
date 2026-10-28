@@ -21,6 +21,16 @@ Read this first when picking the work up again.
   `http://127.0.0.1:18095/?host=games/cp`. That runs the game the way production does, from the checkout.
 - **Measuring traffic:** join a room from Node with `ws` as a player, send `match:ready`, and compare the text received
   with `ws._socket.bytesRead` (the bytes on the wire). `/api/health` shows the day's total to 0.1 MB.
+- **Local only (not on GitHub):**
+  - This file's latest commits; push them with the next change.
+  - The tag `backup/pre-strip-2026-10-27`.
+  - `.superpowers/` (git-ignored through `.git/info/exclude`): the push-review diffs, and the instant-game-links
+    build ledger with `wording-for-josh.md`.
+  - Nothing is running: no local servers, browser tabs or background jobs were left open.
+- **Waiting on Josh:**
+  1. Which way to cut live traffic, now that WebSocket compression is stripped by Render's proxy (see below).
+  2. How to handle the first host after a push timing out (see below).
+  3. The contact email fix in Cloudflare (his account).
 - **How Josh works:**
   - Show him the diff before every push. He creates every account.
   - Ask in plain text; no pre-written answer buttons (his ask, 2026-10-28).
