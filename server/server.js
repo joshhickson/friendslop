@@ -1,6 +1,7 @@
 // HTTP static file server + WebSocket endpoint (/ws).
 
 import http from 'node:http';
+import zlib from 'node:zlib';
 import { readFile, stat, realpath } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { join, resolve, relative, sep, extname, dirname } from 'node:path';
@@ -94,6 +95,21 @@ function mounts({ gamesDir, devCdn }) {
 
 /** Routes whose files the sandboxed frame (opaque origin) loads, so any origin may read them. */
 const CROSS_ORIGIN_PREFIXES = ['/frame/', '/dev-cdn/', '/vendor/', '/shared/'];
+
+/**
+ * WebSocket compression (permessage-deflate). Each connection's compressor keeps a window of what it
+ * sent before, so a game snapshot that is the last one with a few numbers changed costs a fraction of
+ * its text: about a tenth for a 10 v 10 shooter. Every browser supports it; a client that doesn't
+ * offer it gets plain text. The compressor memory is capped at about 128 KB a connection (a 16 KB
+ * window and memLevel 7). Messages from clients are small inputs, so their window is dropped after
+ * each one to save memory; they count toward no budget.
+ */
+const WS_COMPRESSION = {
+  zlibDeflateOptions: { level: zlib.constants.Z_BEST_SPEED, memLevel: 7 },
+  serverMaxWindowBits: 14,
+  clientNoContextTakeover: true,
+  threshold: 256, // smaller messages go as they are
+};
 
 /** CSP hashes for the inline <script> blocks in index.html (the import map), so no other inline script can run. */
 async function inlineScriptHashes() {
@@ -222,7 +238,7 @@ export async function createGameServer(config, { log = createLogger(config.logLe
   });
 
   // ---- WebSocket ----
-  const wss = new WebSocketServer({ noServer: true, maxPayload: LIMITS.MAX_RELAY_BYTES, perMessageDeflate: false });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: LIMITS.MAX_RELAY_BYTES, perMessageDeflate: WS_COMPRESSION });
   const perIp = new Map();
   let players = 0; // connections other than the server's own bots
   let proxyHeadersLogged = false;
@@ -266,7 +282,7 @@ export async function createGameServer(config, { log = createLogger(config.logLe
       ws.on('pong', () => { ws.isAlive = true; });
       // eslint-disable-next-line no-new
       // Bot traffic stays on this machine, so only player connections count toward the budget.
-      new Connection(ws, { ip, manager, log: log.child('conn'), games, defaultGame: config.defaultGame, traffic: internalBot ? null : traffic, remote });
+      new Connection(ws, { ip, manager, log: log.child('conn'), games, defaultGame: config.defaultGame, traffic: internalBot ? null : traffic, remote, socket });
     });
   });
 

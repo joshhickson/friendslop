@@ -1,5 +1,6 @@
 import { test, before, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
 import { startServer, TestClient, sleep } from './helpers.js';
 import { COPY } from '../shared/copy.js';
 import { LIMITS } from '../shared/protocol.js';
@@ -245,13 +246,15 @@ test('a big relay from anyone but the runner closes the socket', async () => {
 test('relay traffic counts toward the daily budget', async () => {
   const s = await setup();
   await play(s);
-  const data = 'y'.repeat(10 * 1024);
+  // Random base64, which compression can take down to about three quarters of its size, no further.
+  const data = randomBytes(7680).toString('base64');
   const size = JSON.stringify({ t: 'game', type: 'counted', data }).length;
   const sent = srv.server.traffic.bytes;
   relay(s.host, [out('all', 'counted', data)]);
   await s.host.nextGame('counted');
   await s.guest.nextGame('counted');
-  assert.ok(srv.server.traffic.bytes - sent >= 2 * size);
+  await sleep(50);
+  assert.ok(srv.server.traffic.bytes - sent >= 2 * size * 0.7);
 });
 
 test('the runner hears team changes, spectating, leaving and the end', async () => {
@@ -324,9 +327,10 @@ test('the runner seat taken by another connection ends the match', async () => {
   const s = await setup();
   await play(s);
   const again = await client();
+  const ended = s.guest.next((m) => m.t === 'match:end');
   again.send('room:join', { roomId: s.roomId, token: s.hostToken, resume: true });
   await again.next((m) => m.t === 'welcome');
-  const end = await s.guest.next((m) => m.t === 'match:end');
+  const end = await ended;
   assert.equal(end.result.text, COPY.hostLeft);
 });
 

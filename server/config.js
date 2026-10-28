@@ -76,8 +76,9 @@ export function loadConfig(argv = process.argv.slice(2), env = process.env) {
     // Close a room when no human in it has sent anything for this long, so a forgotten tab
     // doesn't keep a match streaming all night.
     roomIdleMs: int(env.ROOM_IDLE_MS, 0),
-    // Megabytes the server may send to players per day (UTC). Past it, no new rooms or
-    // matches start until midnight UTC; running matches finish.
+    // Megabytes the server may send to players per day (UTC), counted after WebSocket
+    // compression. Past it, no new rooms or matches start until midnight UTC; running matches go
+    // on until 1.25 times it (see traffic.js).
     dailyTrafficMb: int(env.DAILY_TRAFFIC_MB, 0),
 
     // ---- Games that run from a GitHub link (the host's browser runs them) ----

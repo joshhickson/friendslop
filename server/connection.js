@@ -7,9 +7,12 @@ import { TokenBucket } from './security.js';
 const OPEN = 1;
 
 export class Connection {
-  constructor(ws, { ip, manager, log, games, defaultGame, traffic = null, remote = null }) {
+  /** `socket` is the network socket under `ws`; its byte count is what the traffic meter adds up. */
+  constructor(ws, { ip, manager, log, games, defaultGame, traffic = null, remote = null, socket = null }) {
     this.ws = ws;
     this.traffic = traffic;
+    this.socket = socket;
+    this.wireCounted = socket?.bytesWritten ?? 0;
     this.ip = ip;
     this.manager = manager;
     this.log = log;
@@ -45,10 +48,24 @@ export class Connection {
     if (this.ws.readyState !== OPEN) return;
     // If a client can't keep up, drop non-essential traffic rather than buffering forever.
     if (this.ws.bufferedAmount > 1_000_000) return;
-    // String length stands in for bytes: the protocol is JSON and almost all ASCII.
-    this.traffic?.add(raw.length);
-    this.ws.send(raw);
+    if (!this.traffic) return this.ws.send(raw);
+    if (!this.socket) {
+      // No socket to read (not reached by the server itself): string length stands in for bytes.
+      this.traffic.add(raw.length);
+      return this.ws.send(raw);
+    }
+    // Compression runs off the main thread, so the bytes are counted once the frame is written.
+    this.ws.send(raw, this.#countWire);
   }
+
+  /** Adds what the socket wrote since the last count (compressed frames, framing, pings) to the meter. */
+  #countWire = () => {
+    if (!this.traffic || !this.socket) return;
+    const written = this.socket.bytesWritten;
+    const sent = written - this.wireCounted;
+    this.wireCounted = written;
+    if (sent > 0) this.traffic.add(sent);
+  };
 
   send(type, data = {}) {
     this.sendRaw(JSON.stringify({ t: type, ...data }));
@@ -88,6 +105,7 @@ export class Connection {
 
   #onClose() {
     this.closed = true;
+    this.#countWire(); // the close frame and anything written since the last send
     if (this.room && this.player) this.room.disconnected(this.player);
     this.unbind();
   }

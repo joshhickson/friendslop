@@ -20,9 +20,11 @@ export async function startServer(env = {}) {
 
 /** A scripted test client that records every message it receives. */
 export class TestClient {
-  constructor(base, { origin = `http://${base}` } = {}) {
+  /** `compress: false` connects like a client that doesn't offer WebSocket compression. */
+  constructor(base, { origin = `http://${base}`, compress = true } = {}) {
     this.base = base;
     this.origin = origin;
+    this.compress = compress;
     this.messages = [];
     this.waiters = [];
     this.listeners = new Set();
@@ -30,7 +32,7 @@ export class TestClient {
 
   connect() {
     return new Promise((resolve, reject) => {
-      this.ws = new WebSocket(`ws://${this.base}/ws`, { headers: { Origin: this.origin } });
+      this.ws = new WebSocket(`ws://${this.base}/ws`, { headers: { Origin: this.origin }, perMessageDeflate: this.compress });
       this.ws.on('message', (raw) => {
         const msg = JSON.parse(raw.toString());
         this.messages.push(msg);

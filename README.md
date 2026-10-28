@@ -150,6 +150,10 @@ that must stay empty, so every game on it comes from a link (a game committed to
   budget is used. Running matches go on until the day's total reaches 1.25 times the budget, and then
   they end too. The budget resets at midnight UTC.
   `/api/health` shows the day's total.
+- **WebSocket messages are compressed** (permessage-deflate), and each connection's compressor
+  remembers what it sent recently, so a game snapshot that is the last one with a few numbers changed
+  costs a fraction of its text. In a 10 v 10 Control Points match, one player received 0.21 MB a
+  minute instead of 1.67 MB. The budget counts the compressed bytes the server actually writes.
 - **Forgotten tabs don't stream all night:** `ROOM_IDLE_MS` closes a room when no human in it has
   sent anything for that long.
 - **It has no games of its own.** The home screen offers the paste-a-link box. Keep
@@ -179,7 +183,7 @@ All settings are environment variables (or `--port`, `--host`, `--open` flags).
 | `ROOM_CREATES_PER_MINUTE` | `10` | Rooms one address may create per minute |
 | `RECONNECT_GRACE_MS` | `20000` | How long a dropped player keeps their seat |
 | `ROOM_IDLE_MS` | `0` (off) | Close a room when no human in it has sent anything for this long |
-| `DAILY_TRAFFIC_MB` | `0` (off) | Data the server may send to players per UTC day before it refuses new rooms and matches. Running matches end at 1.25 times it. |
+| `DAILY_TRAFFIC_MB` | `0` (off) | Data the server may send to players per UTC day, counted after compression, before it refuses new rooms and matches. Running matches end at 1.25 times it. |
 | `GAME_CDN` | `https://cdn.jsdelivr.net/gh/` | Where games shared by link load from: `<GAME_CDN><user>/<repo>@<commit>/...` |
 | `THREE_BASE` | `https://cdn.jsdelivr.net/npm/three@0.186.1/` | Where the game frame loads three.js from |
 | `GITHUB_API` | `https://api.github.com` | Where the host's browser turns a branch name into a commit |
