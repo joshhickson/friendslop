@@ -152,6 +152,41 @@ Ideas to look into, none decided:
 - First step: try to connect one or two real open-source browser multiplayer games and write down
   what got in the way. That shows which of the ideas above matters most.
 
+## Planned: a list of reviewed games
+
+Josh, 2026-10-28: games made by other people get listed in one small file in this repo, with each
+game's repo, folder and pinned commit, and the games page on friendslop.us reads from it. It keeps
+every game in its maker's own repo, so authorship stays plain to see.
+
+- Updating a listed game means changing its commit in the list, which shows up as one readable line
+  in the diff for review.
+- Git submodules were considered and set aside (2026-10-28):
+  - a submodule update shows only a new commit hash, which is easy to approve unread;
+  - play.friendslop.us loads linked games through jsDelivr, which probably doesn't follow
+    submodules (not tested);
+  - a plain clone leaves a submodule folder empty, which would confuse new makers.
+- This is the roadmap's "Games made by other people on the games page".
+
+## Website look: text over the grid
+
+Josh, 2026-10-28: the text clashes with the grid background on friendslop.us, but the grid stays.
+
+1. Josh adds design plugins from the Claude plugin directory. All three were suggested on
+   2026-10-28:
+   - **audit-suite** (community): `web-design-guidelines`, `make-interfaces-feel-better`, and the
+     design and accessibility audit lenses. No outside connections.
+   - **Design** (Anthropic): design critique and accessibility review. Use only its skills, and leave
+     its Slack connector off.
+   - **Website Design** (UXKIN): page review and a written design system. Its optional UXKIN server
+     isn't needed.
+   They may only show up in a new session, so check what loaded before starting.
+2. Run a critique of the live pages with those skills (and `frontend-design`), then show Josh the
+   findings before planning any edits.
+3. Ways to keep the grid and make text readable, to weigh against the critique:
+   - a solid or slightly see-through panel behind blocks of text;
+   - fading the grid out under reading areas;
+   - a fainter grid wherever there's body text.
+
 ## Known, not blocking
 
 - Contact is GitHub issues, plus contact@joshuahickson.org for private messages (Josh,
