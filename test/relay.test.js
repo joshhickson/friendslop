@@ -250,9 +250,10 @@ test('relay traffic counts toward the daily budget', async () => {
   const data = randomBytes(7680).toString('base64');
   const size = JSON.stringify({ t: 'game', type: 'counted', data }).length;
   const sent = srv.server.traffic.bytes;
+  // Listen on both before sending: the guest's copy can arrive while the host's is awaited.
+  const arrived = Promise.all([s.host.nextGame('counted'), s.guest.nextGame('counted')]);
   relay(s.host, [out('all', 'counted', data)]);
-  await s.host.nextGame('counted');
-  await s.guest.nextGame('counted');
+  await arrived;
   await sleep(50);
   assert.ok(srv.server.traffic.bytes - sent >= 2 * size * 0.7);
 });
