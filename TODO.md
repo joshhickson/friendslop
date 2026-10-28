@@ -2,14 +2,17 @@
 
 Open work for friendslop and friendslop.us, newest first. Tick an item off by deleting it.
 
+## Next: the control points demo
+
+Josh, 2026-10-27: once the site is pushed, return to the control points game, spruce it up, and
+serve it as a working demo with bots that play. His hand checks (below) come after the demo works.
+
 ## One look everywhere
 
-Josh, 2026-10-27, while watching a test match: the play app looks nothing like the website,
-and the website still has three styles. He likes only the first.
+Josh, 2026-10-27, while watching a test match: the play app looks nothing like the website. The
+website itself is down to the one style he likes, Blockout (warm grey grid, orange accent, dark
+ink on light panels), as of the site commit a9bcf76.
 
-- Keep only the website's first style, Blockout (`data-theme="blockout"`: warm grey grid,
-  orange accent, dark ink on light panels). Remove the 2am LAN and Missing texture themes and
-  the theme switcher from friendslop.us (`style.css`, `site.js`, the buttons on every page).
 - Restyle the play app (`client/css/style.css`, the lobby, the home screen, the match HUD and
   the unreviewed banner) to match Blockout, so going from the website to a room feels like one
   place.
@@ -17,17 +20,18 @@ and the website still has three styles. He likes only the first.
 
 ## Before showing friendslop to a real maker
 
-- Merge the site's `instant-game-links` branch and push it. `play.friendslop.us` has answered
-  since 2026-10-27 (Render, free plan, deploying `main` on every push; GoDaddy CNAME `play` to
-  `friendslop-2c4h.onrender.com`), so only Josh's wording review stands in the way.
-- Docs page on friendslop.us with a copy-paste agent setup command (design in progress).
-- Josh's wording review: `.superpowers/sdd/2026-10-26-instant-game-links/wording-for-josh.md`,
-  including "Matches already running can finish" and the site's "it isn't out yet. Soon." line.
-- Josh checks by hand: pointer lock in a 3D game (Esc opens the menu), and the host's tab in the
-  background mid-match.
+- Push the site's `main` (merged locally on 2026-10-27; Josh approved the wording the same day).
+  `play.friendslop.us` is live (Render, free plan, deploying `main` on every push; GoDaddy CNAME
+  `play` to `friendslop-2c4h.onrender.com`).
+- The Docs page on friendslop.us still says "Coming soon". The homepage's "Make your first game"
+  section has the agent prompt and the steps meanwhile.
+- Josh checks by hand, after the demo: pointer lock in a 3D game (Esc opens the menu), and the
+  host's tab in the background mid-match.
 
 ## Known, not blocking
 
+- Contact is GitHub issues (Josh, 2026-10-27). The site's "Talk to Josh" box and CONTRIBUTING.md
+  both say so.
 - The first load of a game at a new commit took about 10 seconds (jsDelivr fetching it for the
   first time, 2026-10-27). Later loads come from its cache.
 - Render's free service sleeps after 15 minutes without traffic, so the first visitor after a
