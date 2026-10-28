@@ -16,9 +16,9 @@ remember disagrees with this file or with the code, trust the code first, then t
 
 ## Status
 
-Current phase: **1 (rules)**. Last updated: 2026-10-28.
+Current phase: **2 (simulator)**. Last updated: 2026-10-28.
 
-- [ ] Phase 1: `RULES.md` with full rules, dial table and expected-value check
+- [x] Phase 1: `RULES.md` with full rules, dial table and expected-value check
 - [ ] Phase 2: rules engine, simulator, red-team, metric report (`sim/REPORT.md`)
 - [ ] Phase 3: playable greybox prototype on friendslop, with logging, played with Josh's friends
 - [ ] Phase 4: art (only after Phase 3 is fun)
@@ -192,15 +192,15 @@ rule, every interaction, every number. Not written for players. Precise over pre
 
 ### Tasks
 
-- [ ] 1.1 Look up Among Us default settings and the timing of a typical game (WebSearch). Note sources.
-- [ ] 1.2 Draft sections 1 to 11.
-- [ ] 1.3 Dial table (section 12).
-- [ ] 1.4 Expected-value check (section 13), with a tiny script in the scratchpad if the arithmetic needs it. Copy
-      the results into `RULES.md`, not the script.
-- [ ] 1.5 Self-review pass: read `RULES.md` as an adversary. For every action, ask "what if two players do this at
+- [x] 1.1 Look up Among Us default settings and the timing of a typical game (WebSearch). Note sources.
+- [x] 1.2 Draft sections 1 to 11.
+- [x] 1.3 Dial table (section 12).
+- [x] 1.4 Expected-value check (section 13). The model is kept at `sim/ev-model.mjs` so Phase 2 can rerun it with
+      measured probabilities.
+- [x] 1.5 Self-review pass: read `RULES.md` as an adversary. For every action, ask "what if two players do this at
       once?", "what if the target is in another room?", "what if this happens during the count or the meeting?",
       "what stops someone doing this forever?". Fix or log each answer.
-- [ ] 1.6 Commit and push. Summarize the rules for Josh in chat in under 15 lines, and list new questions for him.
+- [x] 1.6 Commit and push. Summarize the rules for Josh in chat in under 15 lines, and list new questions for him.
 
 **Exit criteria:** every action and number is specified; no known gap blocks writing the engine; the EV table shows
 no cheat that is always or never worth doing at default dials (or the gap is logged as a Phase 2 question).
@@ -278,6 +278,10 @@ ones and keep every invariant.
 - R12 Small games (4 players) and big games (8). Do the numbers still hold?
 - R13 Each Babel event: does any one of them decide the game by itself?
 - R14 Any action whose best choice is the same over 90 percent of the time (a fake choice).
+- R16 Fake confession: an innocent player baits a wrongful conviction for the $100. Must not be a winning line.
+- R17 Mixing beats repeating: confirm spatially that one skim plus one pickpocket beats two of either (RULES.md
+  section 13 predicts it). If it fails, cheats lost their separate brakes.
+- R18 Every slice-2 cheat has its own brake (RULES.md gap G6): check each in `sim/ev-model.mjs` before building it.
 - R15 Exploit search: optimize the adaptive policy's parameters against the mixed field (simple random search or
   hill climbing is enough). Any parameter set that wins far above its share, or any extreme value (for example
   "never deposit", "always accuse"), is an exploit to fix or a decision to log.
@@ -314,13 +318,14 @@ with Josh when there is reason to; log every change.
 
 ### Tasks
 
+- [ ] 2.0 Before coding: settle RULES.md gaps G1 (gambler behavior) and G2 (guard patrol) in RULES.md.
 - [ ] 2.1 Map model and line of sight, with tests.
 - [ ] 2.2 State, actions (first slice: work, deposit, skim, pickpocket, photograph), the shift clock and the count.
 - [ ] 2.3 Meeting model (beliefs, accusations, votes) and scoring.
 - [ ] 2.4 Observation interface and the first policies (honest, reckless, opportunist, watcher, random).
 - [ ] 2.5 Invariants and fuzzer in `test/reality-check-engine.test.js`.
 - [ ] 2.6 Runner, metrics M1 to M12, and the first `REPORT.md`.
-- [ ] 2.7 Red-team scenarios R1 to R14 and the exploit search R15; fix triage loop until the slice is sound.
+- [ ] 2.7 Red-team scenarios R1 to R18 (R15 is the exploit search); fix triage loop until the slice is sound.
 - [ ] 2.8 Add the remaining cheats (bribe, steal credit, frame, cover up, collusion) one at a time, each with its
       policies, tests and a report rerun.
 - [ ] 2.9 Run the gambling toggle and both ending flavors through the report for Josh's open questions.
@@ -404,3 +409,7 @@ with Josh before adding anything.
 Newest last. One line per session or milestone: date, what was done, where it stopped.
 
 - 2026-10-28: Plan written. Branch `reality-check-casino` created from `main` (e5f6c94). Next: Phase 1, task 1.1.
+- 2026-10-28: Phase 1 done. RULES.md written; the EV model went through four versions (too harsh, locker exploit,
+  huge-skim exploit, an order bug in the model itself) and now shows careful cheating at about 1.2x honest, mixing
+  kinds best (1.27x), reckless cheating losing. Below the 1.3x target on purpose until Phase 2 measures real
+  probabilities. Next: Phase 2, task 2.0.
