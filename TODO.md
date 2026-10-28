@@ -187,6 +187,21 @@ Josh, 2026-10-28: the text clashes with the grid background on friendslop.us, bu
    - fading the grid out under reading areas;
    - a fainter grid wherever there's body text.
 
+## Games page: a place to suggest games
+
+Josh, 2026-10-28: the games page's preview text (its `description` and `og:description`, which is
+what Discord and other link previews show) still says "the ones we want somebody to make", but that
+section was removed in site commit a9bcf76 (2026-10-27). Josh liked having the section, but not its
+examples (hot potato grenade, lava tag and so on), and wants visitors to be able to join in, discuss
+and vote.
+
+- Undecided. One option to look at: a GitHub Discussions category for game ideas on the friendslop
+  repo. Visitors can post an idea, comment and upvote, and Discussions also has polls. The games
+  page would link to it, and could show the top few ideas. Visiting needs no account, but posting
+  and voting need a GitHub account.
+- Whatever is decided, fix the preview text to match the page. If the section stays out, the
+  preview should drop "the ones we want somebody to make".
+
 ## Known, not blocking
 
 - Contact is GitHub issues, plus contact@joshuahickson.org for private messages (Josh,
