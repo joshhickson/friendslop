@@ -2,7 +2,8 @@
 
 Each game is a folder here. The server loads every one it finds when it starts.
 
-This folder starts empty. Make your first game with:
+It holds one demo, Control Points (`cp/`), and the shooter core it is built on (`_shooter/`; folders
+starting with `_` hold shared code and aren't listed as games). Make your own game with:
 
 ```sh
 npm run new-game -- my-game "My Game"
