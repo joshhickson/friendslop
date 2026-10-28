@@ -4,8 +4,19 @@
 // Framework messages use the names below. Game-specific traffic is wrapped in
 // { t: 'game', type: '<your type>', data: <anything JSON> } so games never collide
 // with framework messages.
+//
+// Packed messages (optional): a client that connects to /ws?z=1 gets everything the server sends
+// as binary frames instead of text. Together they are one raw deflate stream (RFC 1951) of the
+// JSON messages, each followed by a newline. Every frame is one message, sync-flushed with its last
+// four bytes (00 00 ff ff) cut off: add them back, feed the frames to one inflater in order, and
+// split the output on newlines. The compressor remembers recent messages, so a snapshot that is
+// "the last one, a little different" costs a few bytes. Text frames still mean plain JSON, and
+// what the client sends is always plain JSON text.
 
 import { COPY } from './copy.js';
+
+/** The query string that asks for packed messages, and the bytes each packed frame leaves off. */
+export const PACKED = Object.freeze({ query: 'z=1', tail: Object.freeze([0x00, 0x00, 0xff, 0xff]) });
 
 export const C2S = Object.freeze({
   CREATE: 'room:create',     // { name, game, password } or, for a GitHub game, { name, password, source, def }

@@ -3,13 +3,18 @@
 
 import { C2S, S2C, ERRORS, LIMITS, cleanText } from '../shared/protocol.js';
 import { TokenBucket } from './security.js';
+import { Packer } from './packer.js';
 
 const OPEN = 1;
 
 export class Connection {
-  /** `socket` is the network socket under `ws`; its byte count is what the traffic meter adds up. */
-  constructor(ws, { ip, manager, log, games, defaultGame, traffic = null, remote = null, socket = null }) {
+  /**
+   * `socket` is the network socket under `ws`; its byte count is what the traffic meter adds up.
+   * `packed`: the client asked for packed messages (PACKED in shared/protocol.js).
+   */
+  constructor(ws, { ip, manager, log, games, defaultGame, traffic = null, remote = null, socket = null, packed = false }) {
     this.ws = ws;
+    this.packer = packed ? new Packer() : null;
     this.traffic = traffic;
     this.socket = socket;
     this.wireCounted = socket?.bytesWritten ?? 0;
@@ -48,6 +53,14 @@ export class Connection {
     if (this.ws.readyState !== OPEN) return;
     // If a client can't keep up, drop non-essential traffic rather than buffering forever.
     if (this.ws.bufferedAmount > 1_000_000) return;
+    if (this.packer) {
+      // Already compressed, so the WebSocket's own compression (if any) is skipped.
+      return this.packer.pack(raw, (frame) => {
+        if (this.ws.readyState !== OPEN) return;
+        if (!this.socket) this.traffic?.add(frame.length);
+        this.ws.send(frame, { binary: true, compress: false }, this.#countWire);
+      });
+    }
     if (!this.traffic) return this.ws.send(raw);
     if (!this.socket) {
       // No socket to read (not reached by the server itself): string length stands in for bytes.
@@ -105,6 +118,7 @@ export class Connection {
 
   #onClose() {
     this.closed = true;
+    this.packer?.close();
     this.#countWire(); // the close frame and anything written since the last send
     if (this.room && this.player) this.room.disconnected(this.player);
     this.unbind();

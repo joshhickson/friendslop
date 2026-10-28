@@ -28,8 +28,7 @@ Read this first when picking the work up again.
     build ledger with `wording-for-josh.md`.
   - Nothing is running: no local servers, browser tabs or background jobs were left open.
 - **Waiting on Josh:**
-  1. Which way to cut live traffic, now that WebSocket compression is stripped by Render's proxy (see below).
-  2. The contact email fix in Cloudflare (his account).
+  1. The contact email fix in Cloudflare (his account).
 - **How Josh works:**
   - Show him the diff before every push. He creates every account.
   - Ask in plain text; no pre-written answer buttons (his ask, 2026-10-28).
@@ -53,25 +52,16 @@ there is lost until it's fixed.
 - Test from an address other than the destination. Gmail hides a forwarded copy of a message
   you sent yourself, so a self-test can look like a failure when it worked.
 
-## Next: compression doesn't survive Render's proxy
+## Check after the next push: packed messages on play.friendslop.us
 
-Josh chose "compress with memory of recent messages" (2026-10-28). The server does it (commit 2e79679): locally a
-10 v 10 Control Points match cost one player 0.21 MB a minute instead of 1.67 MB. **On play.friendslop.us it doesn't
-happen.** Render puts Cloudflare in front of every service, and the handshake reply that comes back through it has no
-`Sec-WebSocket-Extensions` line, though the same server answers with one when reached directly. So a live player still
-receives about 1.67 MB a minute, and the 150 MB a day covers about 90 player-minutes. The meter is right either way:
-it counts the bytes the server writes.
-
-Options, for Josh to pick:
-- **Compress in the app** (closest to his choice): the server sends binary frames from one zlib stream per connection,
-  flushed per message, and the browser inflates them with `DecompressionStream('deflate-raw')`, which keeps the same
-  memory across messages. It needs a protocol version bump and a fallback for clients without `DecompressionStream`.
-- **A compact snapshot format** in `games/_shooter` (measured: about a third of today's size), and/or **fewer
-  snapshots** (15 a second down to 10).
-- **Settled 2026-10-28: the offer is dropped on the way in.** The server logs once per run whether the client's
-  offer reached it. On Render, after a Chromium visit (which always offers compression), it logged
-  `compression: not offered by the client; agreed: none`. So nothing on the server side can turn WebSocket
-  compression on; it has to happen inside the app (Batch 2, Josh agreed 2026-10-28).
+Render's proxy drops the browser's offer of WebSocket compression on the way in (its log said
+`compression: not offered by the client; agreed: none`, 2026-10-28). So since 2026-10-28 the app
+compresses for itself: the browser connects to `/ws?z=1` and the server sends one deflate stream
+per player (`server/packer.js`, unpacked by `client/js/unpack.js`). Locally, in a 10 v 10 Control
+Points match, a packed player received 0.208 MB a minute, the same as with permessage-deflate,
+against 1.70 MB plain. Still to check live: Render's log line should end `packed messages: yes`,
+and `/api/health` should grow by about 0.2 MB a minute per player. At that rate the 150 MB a day
+covers about 700 player-minutes instead of about 90.
 
 ## After every push: warm jsDelivr
 
@@ -99,7 +89,7 @@ floor).
 
 - The Docs page on friendslop.us still says "Coming soon". The homepage's "Make your first game"
   section has the agent prompt and the steps meanwhile.
-- The traffic item above.
+- Checking packed messages live (above).
 
 ## Known, not blocking
 

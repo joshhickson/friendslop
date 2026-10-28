@@ -16,7 +16,7 @@ import { remoteSettings } from './config.js';
 import { renderFrame } from './frame.js';
 import { isHostAllowed, isOriginAllowed, clientIp } from './security.js';
 import { TrafficMeter } from './traffic.js';
-import { LIMITS } from '../shared/protocol.js';
+import { LIMITS, PACKED } from '../shared/protocol.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -249,7 +249,7 @@ export async function createGameServer(config, { log = createLogger(config.logLe
       socket.write(`HTTP/1.1 ${code} ${text}\r\nConnection: close\r\n\r\n`);
       socket.destroy();
     };
-    const { pathname } = new URL(req.url, 'http://x');
+    const { pathname, search } = new URL(req.url, 'http://x');
     if (pathname !== '/ws') return reject(404, 'Not Found');
     if (!isHostAllowed(req, config)) return reject(403, 'Forbidden');
     if (!isOriginAllowed(req, config)) {
@@ -270,6 +270,7 @@ export async function createGameServer(config, { log = createLogger(config.logLe
     if (count >= config.maxConnectionsPerIp && !internalBot) return reject(429, 'Too Many Requests');
     if (players >= config.maxConnections && !internalBot) return reject(503, 'Service Unavailable');
 
+    const packed = search === `?${PACKED.query}`; // the client asked for packed messages
     wss.handleUpgrade(req, socket, head, (ws) => {
       perIp.set(ip, (perIp.get(ip) ?? 0) + 1);
       if (!internalBot) players++;
@@ -278,7 +279,7 @@ export async function createGameServer(config, { log = createLogger(config.logLe
         // drop the offer on the way in or the answer on the way out; this tells the two apart.
         compressionLogged = true;
         const offered = /permessage-deflate/i.test(String(req.headers['sec-websocket-extensions'] ?? ''));
-        log.info(`compression: ${offered ? 'offered' : 'not offered'} by the client; agreed: ${ws.extensions || 'none'}`);
+        log.info(`compression: ${offered ? 'offered' : 'not offered'} by the client; agreed: ${ws.extensions || 'none'}; packed messages: ${packed ? 'yes' : 'no'}`);
       }
       ws.on('close', () => {
         const n = (perIp.get(ip) ?? 1) - 1;
@@ -290,7 +291,7 @@ export async function createGameServer(config, { log = createLogger(config.logLe
       ws.on('pong', () => { ws.isAlive = true; });
       // eslint-disable-next-line no-new
       // Bot traffic stays on this machine, so only player connections count toward the budget.
-      new Connection(ws, { ip, manager, log: log.child('conn'), games, defaultGame: config.defaultGame, traffic: internalBot ? null : traffic, remote, socket });
+      new Connection(ws, { ip, manager, log: log.child('conn'), games, defaultGame: config.defaultGame, traffic: internalBot ? null : traffic, remote, socket, packed });
     });
   });
 

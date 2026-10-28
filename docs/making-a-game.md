@@ -309,6 +309,8 @@ Bots are plain local code and make no network calls of their own.
 **Driving a player from another program.** Anything that can open a WebSocket can play: connect to
 `/ws` with the page's origin as the `Origin` header, send
 `{ t: 'room:join', roomId, password, name, bot: true }`, then follow `shared/protocol.js`.
+Connecting to `/ws?z=1` instead gets the server's messages packed into one compressed stream, about
+an eighth of the size; `shared/protocol.js` says how to unpack them, and `client/js/unpack.js` does it.
 `server/bots/client.js` (`BotClient`) is a ready-made Node client, and `scripts/bot.js` runs one from
 the command line:
 

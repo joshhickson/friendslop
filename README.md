@@ -153,10 +153,13 @@ that must stay empty, so every game on it comes from a link (a game committed to
   budget is used. Running matches go on until the day's total reaches 1.25 times the budget, and then
   they end too. The budget resets at midnight UTC.
   `/api/health` shows the day's total.
-- **WebSocket messages are compressed** (permessage-deflate), and each connection's compressor
-  remembers what it sent recently, so a game snapshot that is the last one with a few numbers changed
-  costs a fraction of its text. In a 10 v 10 Control Points match, one player received 0.21 MB a
-  minute instead of 1.67 MB. The budget counts the compressed bytes the server actually writes.
+- **Messages are compressed,** and each connection's compressor remembers what it sent recently, so
+  a game snapshot that is the last one with a few numbers changed costs a fraction of its text. The
+  browser asks for this inside the app ("packed messages", see `shared/protocol.js`), because Render's
+  proxy drops the WebSocket's own compression (permessage-deflate) on the way in; other clients still
+  get permessage-deflate where it gets through. In a 10 v 10 Control Points match, one player
+  received 0.21 MB a minute instead of 1.70 MB. The budget counts the compressed bytes the server
+  actually writes. On its first player connection the server logs which compression it got.
 - **Forgotten tabs don't stream all night:** `ROOM_IDLE_MS` closes a room when no human in it has
   sent anything for that long.
 - **It has no games of its own.** The home screen offers the paste-a-link box. Keep

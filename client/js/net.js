@@ -1,6 +1,7 @@
 // WebSocket client: auto-reconnect, request helpers, ping + server clock sync.
 
-import { C2S, S2C } from '/shared/protocol.js';
+import { C2S, S2C, PACKED } from '/shared/protocol.js';
+import { canUnpack, createUnpacker } from './unpack.js';
 
 export class Emitter {
   constructor() {
@@ -25,7 +26,9 @@ export class Emitter {
 }
 
 export class Net extends Emitter {
-  constructor(url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`) {
+  // Packed messages cost about an eighth of plain text (PACKED in shared/protocol.js), so ask for
+  // them wherever this browser can unpack them.
+  constructor(url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws${canUnpack() ? `?${PACKED.query}` : ''}`) {
     super();
     this.url = url;
     this.ws = null;
@@ -40,7 +43,10 @@ export class Net extends Emitter {
 
   connect() {
     const ws = new WebSocket(this.url);
+    ws.binaryType = 'arraybuffer';
     this.ws = ws;
+    // Each connection is its own stream. A broken one is dropped, and reconnecting starts afresh.
+    let unpacker = null;
     ws.onopen = () => {
       this.connected = true;
       this.retry = 0;
@@ -48,10 +54,11 @@ export class Net extends Emitter {
       clearInterval(this.pingTimer);
       this.pingTimer = setInterval(() => this.#ping(), 2000);
     };
-    ws.onmessage = (ev) => {
+    const handle = (text) => {
+      if (this.ws !== ws) return;
       let msg;
       try {
-        msg = JSON.parse(ev.data);
+        msg = JSON.parse(text);
       } catch {
         return;
       }
@@ -65,7 +72,17 @@ export class Net extends Emitter {
       if (msg.t === S2C.GAME) return this.emit('game', msg.type, msg.data);
       this.emit(msg.t, msg);
     };
-    ws.onclose = () => {
+    ws.onmessage = (ev) => {
+      if (typeof ev.data === 'string') return handle(ev.data);
+      unpacker ??= createUnpacker(handle, (err) => {
+        console.error('could not unpack a message from the server', err);
+        ws.close();
+      });
+      unpacker.push(ev.data);
+    };
+    ws.onclose = async () => {
+      // Messages still being unpacked arrived before the close, so they are handed over first.
+      await unpacker?.end();
       const was = this.connected;
       this.connected = false;
       clearInterval(this.pingTimer);

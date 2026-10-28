@@ -6,6 +6,7 @@ import { createGameServer } from '../server/server.js';
 import { loadConfig } from '../server/config.js';
 import { createLogger } from '../server/log.js';
 import { createRunner, describeGame } from '../client/frame/runner-core.js';
+import { createUnpacker } from '../client/js/unpack.js';
 
 /** Test-only games: `dots` (two teams, has a bot) and `solo` (no teams, no bot). */
 export const FIXTURE_GAMES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'games');
@@ -20,11 +21,16 @@ export async function startServer(env = {}) {
 
 /** A scripted test client that records every message it receives. */
 export class TestClient {
-  /** `compress: false` connects like a client that doesn't offer WebSocket compression. */
-  constructor(base, { origin = `http://${base}`, compress = true } = {}) {
+  /**
+   * `compress: false` connects like a client that doesn't offer WebSocket compression.
+   * `packed: true` asks for packed messages and unpacks them with the browser's own code.
+   */
+  constructor(base, { origin = `http://${base}`, compress = true, packed = false } = {}) {
     this.base = base;
     this.origin = origin;
     this.compress = compress;
+    this.packed = packed;
+    this.binaryFrames = 0;
     this.messages = [];
     this.waiters = [];
     this.listeners = new Set();
@@ -32,23 +38,31 @@ export class TestClient {
 
   connect() {
     return new Promise((resolve, reject) => {
-      this.ws = new WebSocket(`ws://${this.base}/ws`, { headers: { Origin: this.origin }, perMessageDeflate: this.compress });
-      this.ws.on('message', (raw) => {
-        const msg = JSON.parse(raw.toString());
-        this.messages.push(msg);
-        for (const fn of [...this.listeners]) fn(msg);
-        for (const w of [...this.waiters]) {
-          if (w.pred(msg)) {
-            this.waiters.splice(this.waiters.indexOf(w), 1);
-            clearTimeout(w.timer);
-            w.resolve(msg);
-          }
-        }
+      this.ws = new WebSocket(`ws://${this.base}/ws${this.packed ? '?z=1' : ''}`, { headers: { Origin: this.origin }, perMessageDeflate: this.compress });
+      let unpacker = null;
+      this.ws.on('message', (raw, isBinary) => {
+        if (!isBinary) return this.#receive(raw.toString());
+        this.binaryFrames++;
+        unpacker ??= createUnpacker((text) => this.#receive(text), (err) => { throw err; });
+        unpacker.push(new Uint8Array(raw));
       });
       this.ws.once('error', reject);
       this.ws.once('unexpected-response', (_req, res) => reject(new Error(`HTTP ${res.statusCode}`)));
       this.ws.once('open', () => resolve(this));
     }).then(() => this.waitFor((m) => m.t === 'hello'));
+  }
+
+  #receive(text) {
+    const msg = JSON.parse(text);
+    this.messages.push(msg);
+    for (const fn of [...this.listeners]) fn(msg);
+    for (const w of [...this.waiters]) {
+      if (w.pred(msg)) {
+        this.waiters.splice(this.waiters.indexOf(w), 1);
+        clearTimeout(w.timer);
+        w.resolve(msg);
+      }
+    }
   }
 
   /** Calls `fn` with every message from now on. Returns a function that stops it. */

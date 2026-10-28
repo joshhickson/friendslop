@@ -91,3 +91,90 @@ test('a client that does not offer compression still plays, and is counted in fu
     await srv.close();
   }
 });
+
+// ---- packed messages: compression inside the app, for proxies that drop permessage-deflate ----
+
+test('a client that asks for packed messages gets them, intact and small', async () => {
+  const srv = await startServer();
+  // Like a browser behind Render's proxy: no WebSocket compression, so the app packs instead.
+  const host = await remoteMatch(srv, { compress: false, packed: true });
+  try {
+    assert.equal(host.ws.extensions, '');
+    assert.ok(host.binaryFrames > 0, 'hello and the rest came packed');
+    const meter = srv.server.traffic;
+    let text = 0;
+    const before = meter.bytes;
+    for (let tick = 0; tick < 60; tick++) {
+      const data = snapshot(tick);
+      text += JSON.stringify({ t: 'game', type: 'snap', data }).length;
+      host.send('relay', { msgs: [{ k: 'out', to: 'all', type: 'snap', data }] });
+    }
+    const last = await host.waitFor((m) => m.t === 'game' && m.type === 'snap' && m.data.t === snapshot(59).t);
+    assert.deepEqual(last.data, snapshot(59), 'messages arrive intact');
+    await sleep(100);
+    const wire = meter.bytes - before;
+    assert.ok(wire > 0, 'sends are counted');
+    assert.ok(wire < text * 0.3, `60 similar snapshots: ${text} bytes of text, ${wire} on the wire`);
+  } finally {
+    host.close();
+    await srv.close();
+  }
+});
+
+test('packed messages keep their order', async () => {
+  const srv = await startServer();
+  const host = await remoteMatch(srv, { compress: false, packed: true });
+  try {
+    const got = [];
+    const stop = host.onMessage((m) => { if (m.t === 'game' && m.type === 'n') got.push(m.data); });
+    // Big and small, so some frames take zlib longer than others.
+    for (let i = 0; i < 200; i++) {
+      const pad = i % 7 === 0 ? randomBytes(3000).toString('base64') : '';
+      host.send('relay', { msgs: [{ k: 'out', to: 'all', type: 'n', data: { i, pad } }] });
+    }
+    await host.waitFor((m) => m.t === 'game' && m.type === 'n' && m.data.i === 199, 5000);
+    stop();
+    assert.deepEqual(got.map((d) => d.i), [...Array(200).keys()]);
+  } finally {
+    host.close();
+    await srv.close();
+  }
+});
+
+test('packed messages skip the WebSocket compression a client also offered', async () => {
+  const srv = await startServer();
+  const host = await remoteMatch(srv, { compress: true, packed: true });
+  try {
+    assert.match(host.ws.extensions, /permessage-deflate/);
+    host.send('relay', { msgs: [{ k: 'out', to: 'all', type: 'ok', data: { fine: true } }] });
+    const got = await host.waitFor((m) => m.t === 'game' && m.type === 'ok');
+    assert.deepEqual(got.data, { fine: true });
+  } finally {
+    host.close();
+    await srv.close();
+  }
+});
+
+test('the unpacker hands over every message pushed before the end, and stays quiet at the end', async () => {
+  const { Packer } = await import('../server/packer.js');
+  const { createUnpacker } = await import('../client/js/unpack.js');
+  const packer = new Packer();
+  const frames = await Promise.all(['one', 'two', 'three'].map((w) => new Promise((res) => packer.pack(JSON.stringify({ w }), res))));
+  packer.close();
+  const lines = [];
+  const errors = [];
+  const unpacker = createUnpacker((t) => lines.push(JSON.parse(t).w), (e) => errors.push(e));
+  for (const f of frames) unpacker.push(f);
+  await unpacker.end();
+  assert.deepEqual(lines, ['one', 'two', 'three']);
+  assert.deepEqual(errors, []);
+});
+
+test('a broken packed stream is reported', async () => {
+  const { createUnpacker } = await import('../client/js/unpack.js');
+  const errors = [];
+  const unpacker = createUnpacker(() => {}, (e) => errors.push(e));
+  unpacker.push(new Uint8Array([0xff, 0xff, 0xff, 0xff, 0xff]));
+  await sleep(50);
+  assert.equal(errors.length, 1);
+});
