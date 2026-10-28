@@ -31,7 +31,8 @@ One human reads every pull request, and that human has a day job and opinions, s
 ## Questions
 
 [Open an issue](https://github.com/joshhickson/friendslop/issues/new). Questions, ideas and "is this a
-bug or am I holding it wrong" are all fine.
+bug or am I holding it wrong" are all fine. For anything you'd rather not post in public, email
+[contact@joshuahickson.org](mailto:contact@joshuahickson.org).
 
 ## License
 

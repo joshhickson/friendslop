@@ -2,6 +2,22 @@
 
 Open work for friendslop and friendslop.us, newest first. Tick an item off by deleting it.
 
+## Required fix: the contact email doesn't arrive
+
+Josh, 2026-10-27: contact@joshuahickson.org was supposed to work, and a test message didn't
+arrive. The site's "Talk to Josh" box and CONTRIBUTING.md both give this address, so mail sent
+there is lost until it's fixed.
+
+- DNS is right (checked 2026-10-27): MX points at `route1/2/3.mx.cloudflare.net` and SPF includes
+  `_spf.mx.cloudflare.net`, so the domain uses Cloudflare Email Routing.
+- Check in the Cloudflare dashboard, under joshuahickson.org, Email, Email Routing:
+  - a routing rule exists for `contact@joshuahickson.org` and is turned on;
+  - its destination address is listed as **Verified** (Cloudflare sends a link that must be
+    clicked first);
+  - the activity log shows the test message, and whether it was delivered, dropped or rejected.
+- Test from an address other than the destination. Gmail hides a forwarded copy of a message
+  you sent yourself, so a self-test can look like a failure when it worked.
+
 ## Next: the control points demo
 
 Josh, 2026-10-27: once the site is pushed, return to the control points game, spruce it up, and
@@ -30,8 +46,8 @@ ink on light panels), as of the site commit a9bcf76.
 
 ## Known, not blocking
 
-- Contact is GitHub issues (Josh, 2026-10-27). The site's "Talk to Josh" box and CONTRIBUTING.md
-  both say so.
+- Contact is GitHub issues, plus contact@joshuahickson.org for private messages (Josh,
+  2026-10-27). The site's "Talk to Josh" box and CONTRIBUTING.md both say so.
 - The first load of a game at a new commit took about 10 seconds (jsDelivr fetching it for the
   first time, 2026-10-27). Later loads come from its cache.
 - Render's free service sleeps after 15 minutes without traffic, so the first visitor after a
