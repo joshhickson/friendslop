@@ -55,11 +55,13 @@ Read this first when picking the work up again.
     avoids a repack permission error.
   - Commits are authored as Josh Hickson `<84687634+joshhickson@users.noreply.github.com>`.
 
-## Required fix: the contact email doesn't arrive
+## To confirm: the contact email arrives
 
 Josh, 2026-10-27: contact@joshuahickson.org was supposed to work, and a test message didn't
-arrive. The site's "Talk to Josh" box and CONTRIBUTING.md both give this address, so mail sent
-there is lost until it's fixed.
+arrive. Josh, 2026-10-28: he thinks it does work, and the test failed only because he sent it from
+the account it forwards to. Still to prove with a message from another address. The site's "Talk
+to Josh" box, CONTRIBUTING.md and the privacy page (friendslop.us/privacy, for data requests) all
+give this address.
 
 - DNS is right (checked 2026-10-27): MX points at `route1/2/3.mx.cloudflare.net` and SPF includes
   `_spf.mx.cloudflare.net`, so the domain uses Cloudflare Email Routing.

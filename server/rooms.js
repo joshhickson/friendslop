@@ -82,7 +82,7 @@ export class RoomManager {
     do id = randomRoomId(); while (this.rooms.has(id));
     const room = new Room({ id, password, def, owner: this });
     this.rooms.set(id, room);
-    this.log.info(`room ${id} created (${def.source ?? def.id}${password ? ', password' : ''}) by ${conn.ip}`);
+    this.log.info(`room ${id} created (${def.source ?? def.id}${password ? ', password' : ''})`);
     room.addPlayer(name, conn);
     return { room };
   }
