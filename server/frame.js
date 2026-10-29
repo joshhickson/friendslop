@@ -94,11 +94,12 @@ export function renderFrame(req, config, { cdn, three }) {
   const frameConfig = { src: formatRef(ref), base, path: ref.path };
 
   const content = [...new Set([cdnSource, threeAt.source])].join(' ');
+  // friendslop's own frame code (boot, runner) imports /shared/protocol.js and /shared/copy.js.
+  const scripts = `${play}/frame/ ${play}/shared/ ${content}`;
   const csp = [
     'sandbox allow-scripts allow-pointer-lock',
     "default-src 'none'",
-    // friendslop's own frame code (boot, runner) imports /shared/protocol.js and /shared/copy.js.
-    `script-src ${play}/frame/ ${play}/shared/ ${content} 'nonce-${nonce}'`,
+    `script-src ${scripts} 'nonce-${nonce}'`,
     // friendslop's own fonts (client/fonts/fonts.css) are open to every game.
     `style-src 'unsafe-inline' ${content} ${play}/client/fonts/`,
     `img-src ${content} data: blob:`,
@@ -106,8 +107,10 @@ export function renderFrame(req, config, { cdn, three }) {
     `font-src ${content} ${play}/client/fonts/`,
     `connect-src ${content}`,
     // The host's runner is a blob: classic worker (see boot.js); a blob: module worker cannot start
-    // from an opaque origin.
-    'worker-src blob:',
+    // from an opaque origin. Firefox checks what that worker import()s against worker-src, where
+    // other browsers use script-src, so the worker may load the same scripts the page may. A
+    // worker still can't start from those: the frame's origin is opaque, so none is same-origin.
+    `worker-src blob: ${scripts}`,
     "frame-ancestors 'self'",
   ].join('; ');
 

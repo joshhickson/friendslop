@@ -79,7 +79,8 @@ test('the frame page is sandboxed by header', async () => {
     assert.ok(d['script-src'].includes(`${play}/shared/`));
     assert.ok(d['script-src'].includes('https://cdn.jsdelivr.net'));
     assert.deepEqual(d['default-src'], ["'none'"]);
-    assert.deepEqual(d['worker-src'], ['blob:']);
+    // Firefox checks the runner worker's import()s against worker-src: the same scripts as the page.
+    assert.deepEqual(d['worker-src'], ['blob:', ...d['script-src'].filter((s) => !s.startsWith("'nonce-"))]);
     assert.deepEqual(d['frame-ancestors'], ["'self'"]);
     assert.ok(!d['script-src'].includes("'unsafe-inline'") && !d['script-src'].includes("'unsafe-eval'"));
     assert.equal(res.headers['x-frame-options'], undefined);
