@@ -116,7 +116,13 @@ play.friendslop.us carries every room itself, on a free Render plan with 150 MB 
 To make the site show what the platform can do, we took the hosting setup and its limits on
 ourselves. Find a way for hosting to really be easy for the people who use friendslop.
 
-First lead: clone https://github.com/tweakyourpc/game-night.git and read it.
+Josh, 2026-10-28: don't copy game-night's mechanic, since running it from Google Sheets and Apps
+Script risks breaking Google's terms. Look for hosting ideas nobody considered before. That research
+is done: [docs/research/2026-10-28-hosting-options.md](docs/research/2026-10-28-hosting-options.md).
+It recommends letting the host's browser send its room's game messages straight to each player,
+with our server as the fallback, and lists three decisions for Josh.
+
+Where it started: https://github.com/tweakyourpc/game-night.git.
 
 - What it is (from its README, 2026-10-28): a kit of six turn-based board and word games that
   someone installs into their own Google Sheet and its Apps Script project. Google runs the web app
