@@ -16,7 +16,7 @@ remember disagrees with this file or with the code, trust the code first, then t
 
 ## Status
 
-Current phase: **2 (simulator)**. Last updated: 2026-10-28.
+Current phase: **2 (simulator)**, next task 2.0. Last updated: 2026-10-29.
 
 - [x] Phase 1: `RULES.md` with full rules, dial table and expected-value check
 - [ ] Phase 2: rules engine, simulator, red-team, metric report (`sim/REPORT.md`)
@@ -128,6 +128,10 @@ whether the change is worth it.
    commission). Scoring must not depend on the flavor; keep the flavor in one place.
 2. **Gambling on your break:** can players gamble their own winnings? Model it in the simulator as a toggle and
    report what it does, so Josh can decide with numbers.
+
+3. **Calls Claude made in Phase 1 that Josh may overrule** (raised 2026-10-28, no answer yet; keep building on them
+   until he says otherwise): nobody is ever eliminated (a guilty player pays and keeps playing), and the vote always
+   reveals guilty or innocent (a setting, `confirmReveal`, default on). See RULES.md Decision log rows 1 and 2.
 
 Write any new question for Josh into this list, and tell him in chat at the end of the session.
 
@@ -404,6 +408,25 @@ with Josh before adding anything.
 
 ---
 
+## Working notes (environment gotchas and recipes)
+
+- **Web research:** the Firecrawl connector ran out of credits on 2026-10-28; use the built-in WebSearch tool (load
+  it with ToolSearch `select:WebSearch`). Cite sources with markdown links when reporting to Josh.
+- **Killing processes:** `pkill -f "<pattern>"` also matches the shell running it and kills the command (exit 144).
+  Use `pgrep -f <pattern>` to get PIDs, then `kill <pid>`.
+- **Fresh clone:** run `npm ci` before `npm test`. The full suite takes about 30 s.
+- **Browser testing the link-hosted path** (what play.friendslop.us does), used for the card version and reusable
+  in Phase 3: start `DEV_CDN=1 GAMES_DIR=server/no-games PORT=18095 node server/start.js` in the background, then
+  drive Chromium with Playwright (`require('playwright')`, `chromium.launch()`, no install needed). Open
+  `http://127.0.0.1:18095/?host=games/<id>`, fill `input[placeholder="Your name"]`, click "Host this game", and
+  click "Play anyway" on the first-look warning. Every new browser context shows that warning again, including a
+  guest's at match start. The game runs in an iframe: use `page.frameLocator('iframe')`. A guest joins with "Join
+  room" and the 6-letter code from the host's lobby. Lobby settings are `input[type=number]` fields; bots are added
+  with the "How many" field and "Add bots". Screenshots go to the scratchpad and can be viewed with Read.
+- **Fake-ctx harness:** `test/reality-check.test.js` on branch `reality-check-demo` runs a game's `create(ctx)`
+  against a fake ctx with a hand-moved clock. Copy its `harness()` for the engine tests
+  (`git show origin/reality-check-demo:test/reality-check.test.js`; fetch the branch first with the refspec trick).
+
 ## Session log
 
 Newest last. One line per session or milestone: date, what was done, where it stopped.
@@ -413,3 +436,5 @@ Newest last. One line per session or milestone: date, what was done, where it st
   huge-skim exploit, an order bug in the model itself) and now shows careful cheating at about 1.2x honest, mixing
   kinds best (1.27x), reckless cheating losing. Below the 1.3x target on purpose until Phase 2 measures real
   probabilities. Next: Phase 2, task 2.0.
+- 2026-10-29: Prepared for a context compaction: working notes and Josh's pending calls written here. Nothing in
+  progress. Next: Phase 2, task 2.0 (settle RULES.md gaps G1 and G2), then 2.1.
