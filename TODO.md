@@ -16,8 +16,8 @@ work moves to [DONE.md](DONE.md). Each item links to its details further down.
 - [ ] [Study tweakyourpc/game-night for ways to stop carrying everyone's hosting ourselves](#hosting-burden)
 - [ ] [Critique the website's look, then plan how text and the grid fit together](#website-look) (first pass done, the plugins' audits next)
 - [ ] [Fix the games page preview text](#game-ideas) (after the decision)
+- [ ] [Push the Firefox hosting fix](#firefox-hosting) (live bug: a Firefox host's match crashes at the start)
 - [ ] [Push the "Play the demo" button on play.friendslop.us](#demo-button) (built and committed locally)
-- [ ] [Try packed messages in Firefox and Safari](#packed-messages-browsers) (needs Josh's yes to a download)
 
 ## Later
 
@@ -152,16 +152,16 @@ Still odd on that screen: with no games of its own, the public server's "Create 
 games are installed on this server yet... make one with npm run new-game", which is maker advice on
 a page visitors see.
 
-<a id="packed-messages-browsers"></a>
-## Packed messages in Firefox and Safari
+<a id="firefox-hosting"></a>
+## Firefox hosting fix
 
-Packed messages (`/ws?z=1`, see [DONE.md](DONE.md)) were checked live in Chrome only. Firefox 113
-and Safari 16.4 and later support the browser's built-in decompression they need; older browsers get
-plain text. Play a match in each and check Render's log says `packed messages: yes`.
-
-Playwright can run Firefox's and Safari's engines against a local server, but only Chromium is
-installed here (2026-10-28). `npx playwright install firefox webkit` downloads the other two from
-Microsoft, so it waits for Josh's yes.
+Found 2026-10-29 while testing packed messages in Firefox (see [DONE.md](DONE.md)). On
+play.friendslop.us a host using Firefox gets "The game crashed: error loading dynamically imported
+module" as soon as the match starts, for every game shared by link. Firefox checks what the host's
+runner worker imports against the frame's `worker-src`, and that allows only `blob:`. Chrome and
+Safari use `script-src` there, so they work. Fixed in commit 302a051 (not pushed): `worker-src` now
+allows the same scripts as `script-src`. Checked with the live site's frame header on 2026-10-29: it
+still says `worker-src blob:`.
 
 <a id="existing-games"></a>
 ## Connecting games that already exist

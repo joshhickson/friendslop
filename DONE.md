@@ -3,6 +3,21 @@
 Finished work, newest first, with the details worth keeping. What's still open is in
 [TODO.md](TODO.md).
 
+## 2026-10-29: Firefox and Safari
+
+Played the Control Points demo for 30 seconds in Playwright's Chromium, Firefox 156 and WebKit 26.6
+engines against a local server, with the test player seated. All three asked for packed messages and
+the server logged `packed messages: yes`; each received 117 to 131 KB in the 30 seconds, about 0.25
+MB a minute, close to the 0.22 measured live. Safari's engine doesn't offer the WebSocket's own
+compression, so packing matters most there. This was a local server: Render's log on the live site
+wasn't checked.
+
+Firefox couldn't host at all: the frame's `worker-src` blocked the runner's imports, and the match
+crashed at the start. Fixed locally (see [the Firefox hosting fix](TODO.md#firefox-hosting)).
+
+Playwright's Firefox and WebKit engines live in `D:\dev\.playwright-browsers`, off the failing C:
+drive. Point `PLAYWRIGHT_BROWSERS_PATH` there to use them.
+
 ## 2026-10-28: hosting research, the demo button, a Windows fix
 
 - Hosting options researched: [docs/research/2026-10-28-hosting-options.md](docs/research/2026-10-28-hosting-options.md).
