@@ -13,6 +13,7 @@ work moves to [DONE.md](DONE.md). Each item links to its details further down.
 
 ## Next up
 
+- [ ] [Study tweakyourpc/game-night for ways to stop carrying everyone's hosting ourselves](#hosting-burden)
 - [ ] [Critique the website's look, then plan how text and the grid fit together](#website-look) (after the plugins)
 - [ ] [Fix the games page preview text](#game-ideas) (after the decision)
 - [ ] [A "Play the demo" button on play.friendslop.us](#demo-button)
@@ -106,6 +107,28 @@ Ask Josh before each delete.
 - The local tag `backup/pre-strip-2026-10-27` in this repo, kept in case the history rewrite of
   2026-10-27 went wrong. The pushed history has looked right since.
 - The site repo's merged local branch `instant-game-links`.
+
+<a id="hosting-burden"></a>
+## Hosting: who carries it
+
+Josh, 2026-10-28: friendslop tells makers that hosting is easy, but so far that's only true because
+play.friendslop.us carries every room itself, on a free Render plan with 150 MB of traffic a day.
+To make the site show what the platform can do, we took the hosting setup and its limits on
+ourselves. Find a way for hosting to really be easy for the people who use friendslop.
+
+First lead: clone https://github.com/tweakyourpc/game-night.git and read it.
+
+- What it is (from its README, 2026-10-28): a kit of six turn-based board and word games that
+  someone installs into their own Google Sheet and its Apps Script project. Google runs the web app
+  for free, the Sheet stores the game state, and the operator's Google Drive keeps replays and
+  files. Each group runs its own copy on its own Google account, so nobody central pays for
+  hosting. MIT licence, v0.1.0, its README says it is not production-ready.
+- The idea worth taking: the people who play bring the hosting, from a free account they already
+  have, instead of one shared server carrying everyone.
+- Not checked yet: Apps Script answers requests one at a time and can't hold a WebSocket open, so
+  it suits turn-based games. Real-time games like Control Points would need a different free host
+  or a different way to connect players. Look at what game-night does for live updates, and what
+  that would cost a real-time game.
 
 <a id="demo-button"></a>
 ## A demo button on play.friendslop.us
