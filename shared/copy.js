@@ -44,6 +44,7 @@ export const COPY = Object.freeze({
   hostSlowHint: 'The first visit after a change is the slow one, while the game files are fetched for the first time. It can take half a minute.',
   gameSlow: 'The game files took so long to arrive that we gave up. The first visit after a change is the slow one, so try again in a moment.',
   hostStarter: 'Try the starter game',
+  hostDemo: 'Play the demo',
   hostLinkLabel: 'Link to the game folder',
   passwordLabel: 'Password (optional)',
   noPasswordPlaceholder: 'Leave empty for no password',

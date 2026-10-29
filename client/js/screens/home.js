@@ -12,6 +12,9 @@ const LOCAL = `gh:local/friendslop@${'0'.repeat(40)}/`;
 const STARTER = `${LOCAL}templates/starter`;
 // With the dev CDN, a folder of this checkout (games/cp) can be hosted the way a GitHub link is.
 const LOCAL_FOLDER = /^(games|templates)\/[a-z0-9_-]+\/?$/;
+// The Control Points demo, hosted like any other link. With the dev CDN it comes from this checkout.
+const DEMO_LINK = 'https://github.com/joshhickson/friendslop/tree/main/games/cp';
+const DEMO_LOCAL = 'games/cp';
 const DEFAULT_API = 'https://api.github.com';
 
 export function homeScreen(net, { prefillCode = '', preferGame = '', prefillHost = '' } = {}) {
@@ -55,6 +58,12 @@ export function homeScreen(net, { prefillCode = '', preferGame = '', prefillHost
   const hostNote = h('p.muted.small', { role: 'status' });
   const hostButton = h('button.btn.primary', { type: 'submit' }, COPY.hostButton);
   const starterButton = remote.dev ? h('button.btn', { type: 'button', onclick: () => hostFrom(async () => ({ src: STARTER })) }, COPY.hostStarter) : null;
+  // The demo fills in its link first, so the box shows what is being hosted.
+  const demoButton = h('button.btn', { type: 'button', onclick: () => {
+    if (busy) return;
+    hostLink.value = remote.dev ? DEMO_LOCAL : DEMO_LINK;
+    hostFrom(findLink);
+  } }, COPY.hostDemo);
   const inspectBox = h('div.inspect-host');
   const abort = new AbortController();
   let busy = false;
@@ -66,6 +75,7 @@ export function homeScreen(net, { prefillCode = '', preferGame = '', prefillHost
     hostLink.disabled = on;
     hostButton.disabled = on;
     if (starterButton) starterButton.disabled = on;
+    demoButton.disabled = on;
     hostButton.textContent = on ? COPY.hostChecking : COPY.hostButton;
     hostNote.textContent = '';
   }
@@ -143,7 +153,7 @@ export function homeScreen(net, { prefillCode = '', preferGame = '', prefillHost
       h('label.field', COPY.passwordLabel, hostPw),
       hostError,
       hostNote,
-      h('div.row.wrap', hostButton, starterButton));
+      h('div.row.wrap', hostButton, demoButton, starterButton));
   }
 
   function join(e) {
