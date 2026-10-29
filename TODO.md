@@ -14,10 +14,10 @@ work moves to [DONE.md](DONE.md). Each item links to its details further down.
 ## Next up
 
 - [ ] [Study tweakyourpc/game-night for ways to stop carrying everyone's hosting ourselves](#hosting-burden)
-- [ ] [Critique the website's look, then plan how text and the grid fit together](#website-look) (after the plugins)
+- [ ] [Critique the website's look, then plan how text and the grid fit together](#website-look) (first pass done, the plugins' audits next)
 - [ ] [Fix the games page preview text](#game-ideas) (after the decision)
-- [ ] [A "Play the demo" button on play.friendslop.us](#demo-button)
-- [ ] [Try packed messages in Firefox and Safari](#packed-messages-browsers)
+- [ ] [Push the "Play the demo" button on play.friendslop.us](#demo-button) (built and committed locally)
+- [ ] [Try packed messages in Firefox and Safari](#packed-messages-browsers) (needs Josh's yes to a download)
 
 ## Later
 
@@ -78,7 +78,11 @@ Josh, 2026-10-28: the text clashes with the grid background on friendslop.us, bu
 
    They may only show up in a new session, so check what loaded before starting.
 2. Run a critique of the live pages with those skills (and `frontend-design`), then show Josh the
-   findings before planning any edits.
+   findings before planning any edits. A first pass with `frontend-design` alone is in
+   [docs/research/2026-10-28-site-look-critique.md](docs/research/2026-10-28-site-look-critique.md)
+   (2026-10-28): the orange lines are as thick as body text strokes, and the grid is pinned to the
+   page corner while the column is centred. It suggests a quiet backing behind running text and
+   pinning the grid to the column.
 3. Ways to keep the grid and make text readable, to weigh against the critique:
    - a solid or slightly see-through panel behind blocks of text;
    - fading the grid out under reading areas;
@@ -139,9 +143,14 @@ Where it started: https://github.com/tweakyourpc/game-night.git.
 <a id="demo-button"></a>
 ## A demo button on play.friendslop.us
 
-A visitor who goes to play.friendslop.us directly only sees the name field and the link box. Add a
-"Play the demo" button to its home screen (`client/js/screens/home.js`, wording in `shared/copy.js`)
-that fills in the Control Points link.
+A visitor who goes to play.friendslop.us directly only sees the name field and the link box. Built
+2026-10-28 (commit 24c478a, not pushed): a "Play the demo" button next to "Host this game" fills in
+the Control Points link and hosts it, through the usual first-look warning. With `DEV_CDN` it hosts
+`games/cp` from the checkout. Checked locally in Playwright: it opens a Control Points lobby.
+
+Still odd on that screen: with no games of its own, the public server's "Create room" tab says "No
+games are installed on this server yet... make one with npm run new-game", which is maker advice on
+a page visitors see.
 
 <a id="packed-messages-browsers"></a>
 ## Packed messages in Firefox and Safari
@@ -149,6 +158,10 @@ that fills in the Control Points link.
 Packed messages (`/ws?z=1`, see [DONE.md](DONE.md)) were checked live in Chrome only. Firefox 113
 and Safari 16.4 and later support the browser's built-in decompression they need; older browsers get
 plain text. Play a match in each and check Render's log says `packed messages: yes`.
+
+Playwright can run Firefox's and Safari's engines against a local server, but only Chromium is
+installed here (2026-10-28). `npx playwright install firefox webkit` downloads the other two from
+Microsoft, so it waits for Josh's yes.
 
 <a id="existing-games"></a>
 ## Connecting games that already exist

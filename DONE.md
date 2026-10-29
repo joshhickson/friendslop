@@ -3,6 +3,15 @@
 Finished work, newest first, with the details worth keeping. What's still open is in
 [TODO.md](TODO.md).
 
+## 2026-10-28: hosting research, the demo button, a Windows fix
+
+- Hosting options researched: [docs/research/2026-10-28-hosting-options.md](docs/research/2026-10-28-hosting-options.md).
+- A first critique of the site's look: [docs/research/2026-10-28-site-look-critique.md](docs/research/2026-10-28-site-look-critique.md).
+- play.friendslop.us's home screen has a "Play the demo" button (not pushed yet).
+- On a Windows checkout the server hashed `client/index.html`'s import map with its CRLF line
+  endings, but browsers hash it with LF, so the page's own CSP blocked the import map. The server
+  now hashes it the way browsers do. The live site, on Linux, was never affected.
+
 ## 2026-10-28: privacy
 
 - friendslop.us/privacy says what both sites collect, how long it's kept, and who else is in the
