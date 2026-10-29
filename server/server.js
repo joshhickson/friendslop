@@ -114,8 +114,9 @@ const WS_COMPRESSION = {
 /** CSP hashes for the inline <script> blocks in index.html (the import map), so no other inline script can run. */
 async function inlineScriptHashes() {
   const html = await readFile(join(ROOT, 'client', 'index.html'), 'utf8');
+  // The browser turns CRLF into LF before it hashes, so a Windows checkout must hash the same text.
   return [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)]
-    .map((m) => `'sha256-${createHash('sha256').update(m[1]).digest('base64')}'`);
+    .map((m) => `'sha256-${createHash('sha256').update(m[1].replace(/\r\n?/g, '\n')).digest('base64')}'`);
 }
 
 let scriptHashes = [];
