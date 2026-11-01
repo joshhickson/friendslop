@@ -23,6 +23,7 @@ work moves to [DONE.md](DONE.md). Each item links to its details further down.
 
 - [ ] [Make it easier to connect games that already exist](#existing-games)
 - [ ] [A list file of reviewed games, read by the games page](#reviewed-games)
+- [ ] [Quiver's local multiplayer games, streamed from the host to friends' browsers](#quiver-streaming) (spike first)
 
 ## Every time
 
@@ -200,6 +201,18 @@ every game in its maker's own repo, so authorship stays plain to see.
     submodules (not tested);
   - a plain clone leaves a submodule folder empty, which would confuse new makers.
 - This is the roadmap's "Games made by other people on the games page".
+
+<a id="quiver-streaming"></a>
+## Quiver's games, streamed from the host
+
+Josh, 2026-10-31: make friendslop work with the games Quiver Launcher installs, so only the host
+sets anything up and friends join from a browser. Research:
+[docs/research/2026-10-31-quiver-games-multiplayer.md](docs/research/2026-10-31-quiver-games-multiplayer.md).
+
+Most of those games need the original game's data and only run on a desktop, so the host can't hand
+the files to friends. What can work is streaming, the way Remote Play Together does it: the game runs
+on the host's computer, friends get video in the browser and send their controls back. The host
+installs a small program for the controls. First step: a one-evening spike with C-Dogs SDL.
 
 <a id="warm-jsdelivr"></a>
 ## After every push: warm jsDelivr
