@@ -185,6 +185,12 @@ Ideas to look into, none decided:
   say) can join rooms directly.
 - First step: try to connect one or two real open-source browser multiplayer games and write down
   what got in the way. That shows which of the ideas above matters most.
+- **First try, 2026-11-01:** Trivia Blast from Rumpus (rodwilco/rumpus, AGPL-3.0) runs through a
+  120-line adapter on the local branch `spike/rumpus-trivia`. What got in the way: its files were
+  written for Node (CommonJS, Node's crypto) so they had to become ES modules, its timers use the
+  host's clock, and friendslop players load into a match one by one. The adapter idea above held up.
+  Josh may use it for a friends demo. More in
+  [the modded games note](docs/research/2026-11-01-modded-games-direction.md).
 
 <a id="reviewed-games"></a>
 ## A list of reviewed games
