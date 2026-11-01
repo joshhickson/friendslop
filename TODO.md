@@ -23,7 +23,7 @@ work moves to [DONE.md](DONE.md). Each item links to its details further down.
 
 - [ ] [Make it easier to connect games that already exist](#existing-games)
 - [ ] [A list file of reviewed games, read by the games page](#reviewed-games)
-- [ ] [Quiver's local multiplayer games, streamed from the host to friends' browsers](#quiver-streaming) (spike first)
+- [ ] [Retro games in the browser, each player with their own copy](#browser-emulators) (spike first)
 
 ## Every time
 
@@ -202,17 +202,20 @@ every game in its maker's own repo, so authorship stays plain to see.
   - a plain clone leaves a submodule folder empty, which would confuse new makers.
 - This is the roadmap's "Games made by other people on the games page".
 
-<a id="quiver-streaming"></a>
-## Quiver's games, streamed from the host
+<a id="browser-emulators"></a>
+## Retro games in the browser
 
 Josh, 2026-10-31: make friendslop work with the games Quiver Launcher installs, so only the host
-sets anything up and friends join from a browser. Research:
-[docs/research/2026-10-31-quiver-games-multiplayer.md](docs/research/2026-10-31-quiver-games-multiplayer.md).
+sets anything up and friends join from a browser
+([research](docs/research/2026-10-31-quiver-games-multiplayer.md)). Those games need the original
+game's data and only run on a desktop, so the host can't hand out the files. Streaming them from the
+host was the one way that worked, and Josh ruled it out for lag.
 
-Most of those games need the original game's data and only run on a desktop, so the host can't hand
-the files to friends. What can work is streaming, the way Remote Play Together does it: the game runs
-on the host's computer, friends get video in the browser and send their controls back. The host
-installs a small program for the controls. First step: a one-evening spike with C-Dogs SDL.
+Instead (Josh, 2026-10-31: "that's doable, yes please look into that"): every player's browser runs
+the same open-source emulator, each player picks their own copy of the game file, and only controller
+input travels. Research: [docs/research/2026-10-31-browser-emulators.md](docs/research/2026-10-31-browser-emulators.md).
+Nothing does it off the shelf; the missing piece is a small driver that runs an emulator core one
+frame at a time. First step: a local spike with a 2-player homebrew NES game in two windows.
 
 <a id="warm-jsdelivr"></a>
 ## After every push: warm jsDelivr
