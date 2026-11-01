@@ -58,6 +58,7 @@ export default defineClientGame({
     let script = null; // test hook: (frame) => input byte, instead of keyboard and gamepad
     let driftFrames = 0; // test hook: frames left in which only this browser sees an extra press
     const st = { ran: 0, stalledSteps: 0, received: 0, minLead: Infinity, checks: 0, desyncs: 0, lastCheck: '' };
+    const leads = []; // how many frames early each recent press from the other player arrived
     let timer = 0;
     let raf = 0;
 
@@ -137,10 +138,14 @@ export default defineClientGame({
 
     function draw() {
       raf = requestAnimationFrame(draw);
+      const recent = leads.length ? Math.min(...leads) : null;
       stats.textContent = [
-        `seat ${seat || 'watching'} | delay ${delay} frames | frame ${frame}`,
-        `waited ${st.stalledSteps} steps for input | inputs received ${st.received}`,
-        `smallest lead ${Number.isFinite(st.minLead) ? st.minLead : '-'} frames`,
+        `seat ${seat || 'watching'} | input delay ${delay} frames (${Math.round(delay * STEP)} ms) | frame ${frame}`,
+        `ping to the server ${Math.round(api.rtt())} ms`,
+        recent === null ? 'no presses from the other player yet'
+          : recent > 0 ? `slowest recent press arrived ${recent} frame${recent === 1 ? '' : 's'} early`
+            : `slowest recent press arrived ${-recent} frame${recent === -1 ? '' : 's'} late (the game waited)`,
+        `waited ${st.stalledSteps} times for input | presses received ${st.received}`,
         `memory checks ${st.checks}, desyncs ${st.desyncs}${st.lastCheck ? ` (${st.lastCheck})` : ''}`,
       ].join('\n');
     }
@@ -197,6 +202,8 @@ export default defineClientGame({
     api.on('in', (m) => {
       st.received++;
       st.minLead = Math.min(st.minLead, m.f - frame);
+      leads.push(m.f - frame);
+      if (leads.length > 600) leads.shift(); // the last ten seconds or so
       put(m.f, m.s, m.b);
     });
     api.on('check', (m) => {

@@ -7,7 +7,6 @@
 import { defineGame, isNum } from '../../server/kit/index.js';
 
 const SEATS = 2;       // NES controllers
-const DELAY = 4;       // frames of input delay: an input for frame f is sent while frame f - DELAY runs
 const FRAME_MAX = 60 * 60 * 60 * 4; // four hours of frames
 
 const isFrame = (f) => Number.isInteger(f) && f >= 0 && f <= FRAME_MAX;
@@ -21,6 +20,10 @@ export default defineGame({
   maxPlayers: 8,
   tickRate: 1,
   controls: [['Arrows', 'd-pad'], ['X / Z', 'A / B'], ['Enter', 'Start'], ['Shift', 'Select']],
+  settings: {
+    // An input for frame f is sent while frame f - delay runs, so it has delay frames to arrive.
+    delay: { label: 'Input delay (frames)', default: 4, min: 1, max: 12 },
+  },
 
   create(ctx) {
     const players = new Map(); // id -> { seat, rom }
@@ -42,7 +45,7 @@ export default defineGame({
         return;
       }
       started = true;
-      ctx.broadcast('go', { delay: DELAY, seats: Object.fromEntries(seated.map(([id, p]) => [id, p.seat])) });
+      ctx.broadcast('go', { delay: Math.round(ctx.settings.delay), seats: Object.fromEntries(seated.map(([id, p]) => [id, p.seat])) });
     }
 
     return {
