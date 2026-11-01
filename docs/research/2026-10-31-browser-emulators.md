@@ -112,10 +112,53 @@ server, in lockstep, using a GPL emulator core and a freely licensed homebrew ga
 game is involved. The first thing to find out is whether a prebuilt core (EmulatorJS's or Nostalgist's
 build) can be driven one frame at a time, or whether a core has to be built with Emscripten.
 
+## Spike results (2026-10-31)
+
+Josh said yes to the spike. It's on the local branch `spike/nes-lockstep` (`games/nes-lockstep/`,
+not pushed), and the test script is `.superpowers/tools/nes-spike-test.mjs` (git-ignored).
+
+**What it used.** jsnes 2.1.0 (Apache-2.0), an NES emulator written in plain JavaScript. It can run
+exactly one frame and set each controller's buttons, so it needed no WebAssembly and no frame
+changes. The game was Concentration Room v0.02a (GPL-3.0), a 2-player homebrew card game from its
+author's GitHub release, kept outside the repo. The game is an ordinary friendslop link game: the
+host's runner is the hub that checks fingerprints, hands out the two controllers and passes inputs
+on. Input delay was 4 frames, with a memory check every 120 frames. **It needed no platform changes.**
+
+**Results**, from a local server, so with almost no network lag:
+
+| Browsers (host + guest) | Time | Frames | Memory checks | Drifted apart | Waits for input |
+|---|---|---|---|---|---|
+| Chromium + Chromium | 20 s | 1,201 | 10 | never | none |
+| Chromium + Firefox | 60 s | 3,500 | 29 | never | about 400 steps on Firefox, 10 on Chromium |
+| Firefox + WebKit (Safari's engine) | 60 s | 3,602 | 29 | never | 18 in all |
+
+- **The same game stays identical across browser engines.** That was the biggest unknown, and over
+  3,500 frames of random button presses no check ever differed.
+- **Drift is caught.** When one browser alone saw an extra button press for a second, both browsers
+  flagged "frame 1200 differed" at the next check. The first try missed, correctly: Concentration Room
+  is turn-based and ignored the waiting player's pad, so nothing actually drifted.
+- **Firefox paused in one run.** Between 10 and 40 seconds the Firefox player kept waiting for input,
+  and in lockstep the slower browser sets the pace, so both ran at about 55 to 57 frames a second.
+  Not explained yet. It may be how headless Firefox schedules timers.
+
+**Not tested yet:**
+- real network lag: it was a local server;
+- a person playing: the inputs were scripted, though keyboard and gamepad are wired up;
+- sound (off), a tab in the background (timers slow down there), and picking the file by hand (the
+  test used a hook; the file box is there);
+- WebAssembly emulators for SNES or Genesis.
+
+**Lag, worked out.** With the host's runner as the hub, an input goes sender, server, host, server,
+receiver. The input delay has to cover that whole trip, which is likely 4 to 8 frames for players in
+the US talking to Render in Oregon (an estimate, not measured). Sending inputs from the server
+straight to every player cuts out the host leg, likely 2 to 4 frames. That's the first platform
+change worth making.
+
 ## For Josh to decide
 
-1. Whether to run the spike.
-2. Which console to aim at first, if it works.
+1. Whether to try it with real lag: push the spike game to a branch on GitHub and play it on
+   play.friendslop.us from two places.
+2. Which console to aim at after the NES.
 
 ## Sources
 

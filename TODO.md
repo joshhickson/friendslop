@@ -23,7 +23,7 @@ work moves to [DONE.md](DONE.md). Each item links to its details further down.
 
 - [ ] [Make it easier to connect games that already exist](#existing-games)
 - [ ] [A list file of reviewed games, read by the games page](#reviewed-games)
-- [ ] [Retro games in the browser, each player with their own copy](#browser-emulators) (spike first)
+- [ ] [Retro games in the browser, each player with their own copy](#browser-emulators) (local spike worked; real lag next)
 
 ## Every time
 
@@ -215,7 +215,12 @@ Instead (Josh, 2026-10-31: "that's doable, yes please look into that"): every pl
 the same open-source emulator, each player picks their own copy of the game file, and only controller
 input travels. Research: [docs/research/2026-10-31-browser-emulators.md](docs/research/2026-10-31-browser-emulators.md).
 Nothing does it off the shelf; the missing piece is a small driver that runs an emulator core one
-frame at a time. First step: a local spike with a 2-player homebrew NES game in two windows.
+frame at a time.
+
+Spike, 2026-10-31 (local branch `spike/nes-lockstep`, not pushed): a 2-player homebrew NES game ran
+in lockstep through a local friendslop server, with no platform changes. Chromium with Firefox and
+Firefox with WebKit each stayed identical for a minute, and a forced drift was caught. Next: real
+network lag, and sending inputs from the server straight to every player.
 
 <a id="warm-jsdelivr"></a>
 ## After every push: warm jsDelivr
