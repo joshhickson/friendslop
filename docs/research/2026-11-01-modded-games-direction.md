@@ -142,3 +142,29 @@ The part that transfers is the setup, which friendslop can copy for its own game
    one 3D game?
 4. Where does the Rust/WebAssembly interest go: a faster 3D client later, or a way to run old engines
    in the browser?
+
+## Josh's answers, 2026-11-01
+
+1. The friends want Halo Wars 2, or a first-person Halo, with friends. Josh expects both would need
+   custom modding for multiplayer.
+2. No decision on a level editor. He wants a **study of the modding community**: why mods appeal, and
+   large mod sites such as Nexus Mods.
+3. **For the friends test: one 3D game with working multiplayer, ideally Halo Wars 2 or Halo Wars 1,
+   by Saturday 2026-11-07.**
+4. He raised Rust because people are rewriting games in it, and guesses it makes faster clients.
+
+What I found after his answers (fan and store sources, not checked by playing):
+
+- **Halo Wars 2 still has online play in 2026,** with quick matchmaking and a small share of
+  Terminus Firefight matches, on Xbox and on Windows through the Microsoft Store, Xbox app and Game
+  Pass ([Team Respawn](https://www.teamrespawn.net/blog/posts/how-many-people-still-play-halo-wars-2-2026/),
+  [Xbox store](https://www.xbox.com/en-US/games/store/halo-wars-2/9nblggh5wmkm)). No mod is needed
+  for online co-op. I didn't find it on Steam.
+- **Halo Wars: Definitive Edition is on Steam,** and its mods can work online when every player has
+  the same mod at the same version ([Nexus](https://www.nexusmods.com/halowarsdefinitiveedition/mods/46),
+  [ModDB](https://www.moddb.com/games/halo-wars-definitive-edition/mods)). Mod managers exist
+  (Firebase, Haruspis).
+- **Halo Wars can't run in friendslop.** Microsoft owns its code and art, there's no source, and
+  rebuilding it would be a copy of a specific game. A Halo Wars night would run in the games
+  themselves. Keeping everyone on the same mod version is the friction there, which ties into the
+  community study.
