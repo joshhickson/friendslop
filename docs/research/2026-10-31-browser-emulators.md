@@ -154,11 +154,28 @@ the US talking to Render in Oregon (an estimate, not measured). Sending inputs f
 straight to every player cuts out the host leg, likely 2 to 4 frames. That's the first platform
 change worth making.
 
+### On the live site (2026-10-31)
+
+Josh said yes to a real-lag test. The spike branch is pushed (`spike/nes-lockstep`, which Render
+doesn't deploy), and the lobby now has an input delay setting. The same script then played the game
+on play.friendslop.us, both browsers on this PC, so each press went through Render and the host's
+browser and back, like two laptops on one home network:
+
+| Input delay | Frames a second after starting | Waits for input in 30 s | Drifted apart |
+|---|---|---|---|
+| 4 frames (67 ms) | about 50 | hundreds, all the time | never |
+| 6 frames (100 ms) | 60 | 2 to 6 | never |
+| 8 frames (133 ms) | 60 | none after the first seconds | never |
+
+So with today's path (sender, server, host, server, receiver) a press needs about 6 frames to arrive
+from the same network. Sending presses from the server straight to every player removes the host
+leg, which should bring it near 3. The forced drift was caught on the live site too.
+
 ## For Josh to decide
 
-1. Whether to try it with real lag: push the spike game to a branch on GitHub and play it on
-   play.friendslop.us from two places.
-2. Which console to aim at after the NES.
+1. How it feels to play by hand, from two laptops (Josh is testing, 2026-10-31).
+2. Whether to make the server send presses straight to every player.
+3. Which console to aim at after the NES.
 
 ## Sources
 
