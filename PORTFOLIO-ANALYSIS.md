@@ -115,11 +115,8 @@ shipped features. [Checked: docs/research/, branch spike/nes-lockstep]
   docs/research/2026-11-01-modded-games-direction.md]
 - A design spec has a section where the agent lists "calls" you delegated to it and could overrule.
   [Checked: docs/superpowers/specs/2026-10-26-game-hosting-design.md]
-- Working rules attributed to you: review the diff before every push, you create every account,
-  plain-language prose with no dashes. [Checked: TODO.md "Working notes"]
 
-**What can't be told from the repo:** how much prompting each feature took; whether you edited any
-code by hand; which of the agent's "calls" you checked; what you tested yourself. Your brief says you
+**What can't be told from the repo:** how much prompting each feature took; which of the agent's "calls" you checked; what you tested yourself. Your brief says you
 tested every stage, but the two hand checks in TODO.md are still unticked. [Unknown]
 
 ## 6. How it could be shown
