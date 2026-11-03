@@ -3,6 +3,16 @@
 Finished work, newest first, with the details worth keeping. What's still open is in
 [TODO.md](TODO.md).
 
+## 2026-11-02: the signed-off demo, a public tidy (branch `portfolio/nov4`, not live)
+
+- The Control Points demo no longer shows the "Nobody at friendslop has played this yet" banner
+  (`shared/signed-off.js`). Other games still do.
+- Process notes, local paths and other people's handles came out of the public docs, and the 26 Oct
+  design spec and build plan were removed. They remain in the git history.
+- Checked on the live site, 2026-11-03: the Firefox fix (302a051) and the "Play the demo" button
+  (24c478a) are live; the frame's `worker-src` now lists the same scripts as `script-src`.
+  `spike/nes-lockstep` is pushed.
+
 ## 2026-10-29: Firefox and Safari
 
 Played the Control Points demo for 30 seconds in Playwright's Chromium, Firefox 156 and WebKit 26.6
@@ -13,16 +23,14 @@ compression, so packing matters most there. This was a local server: Render's lo
 wasn't checked.
 
 Firefox couldn't host at all: the frame's `worker-src` blocked the runner's imports, and the match
-crashed at the start. Fixed locally (see [the Firefox hosting fix](TODO.md#firefox-hosting)).
-
-Playwright's Firefox and WebKit engines live in `D:\dev\.playwright-browsers`, off the failing C:
-drive. Point `PLAYWRIGHT_BROWSERS_PATH` there to use them.
+crashed at the start. Fixed in commit 302a051: `worker-src` now allows the same scripts as
+`script-src`.
 
 ## 2026-10-28: hosting research, the demo button, a Windows fix
 
 - Hosting options researched: [docs/research/2026-10-28-hosting-options.md](docs/research/2026-10-28-hosting-options.md).
 - A first critique of the site's look: [docs/research/2026-10-28-site-look-critique.md](docs/research/2026-10-28-site-look-critique.md).
-- play.friendslop.us's home screen has a "Play the demo" button (not pushed yet).
+- play.friendslop.us's home screen has a "Play the demo" button (commit 24c478a).
 - On a Windows checkout the server hashed `client/index.html`'s import map with its CRLF line
   endings, but browsers hash it with LF, so the page's own CSP blocked the import map. The server
   now hashes it the way browsers do. The live site, on Linux, was never affected.
@@ -38,13 +46,13 @@ drive. Point `PLAYWRIGHT_BROWSERS_PATH` there to use them.
 
 ## 2026-10-28: the session plan, four batches
 
-Josh agreed the plan, with a push after each batch.
+The plan was agreed, with a push after each batch.
 
 1. The slow first host waits up to 45 s with a "still loading" note, the capture bonus flashes on
    the clock, the starter template is in the Blockout look, and the server logs what compression it
    got.
 2. Packed messages, live and measured (below).
-3. Bot matches keep moving (below), the bonus rule (only captures in the enemy's half add time, Josh
+3. Bot matches keep moving (below), the bonus rule (only captures in the enemy's half add time,
    approved), and Control Points' 3D world in the Blockout look.
 4. The Docs page on friendslop.us, the `/ws?z=1` line on the protocol page, and the site review
    fixes (below).
@@ -67,12 +75,12 @@ and every game frame.
 
 ## 2026-10-27 and 28: the Control Points demo
 
-Josh, 2026-10-27: spruce it up and serve it as a working demo with bots that play. It runs from a
+Directed 2026-10-27: spruce it up and serve it as a working demo with bots that play. It runs from a
 link with virtual bots, the unreviewed banner can be closed, and the UI and 3D world are in the
 Blockout look.
 
 Bot matches used to stall. A fast-forward simulator of bot-only matches
-(`.superpowers/tools/sim-cp.mjs`, local only: the real game and bot code in the real runner on a
+(kept outside the repo: the real game and bot code in the real runner on a
 virtual clock) showed that in 8 matches the front stuck at C for 6 to 16 minutes, with about 3
 captures a match, and red won all 8. Three causes, all fixed 2026-10-28:
 

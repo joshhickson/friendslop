@@ -4,7 +4,7 @@
 This used the frontend-design guidance only. The three design plugins in TODO.md aren't added yet,
 so their audits are still to come. Nothing has been changed.
 
-Josh, 2026-10-28: the text clashes with the grid background, but the grid stays.
+Decided 2026-10-28: the text clashes with the grid background, but the grid stays.
 
 ## What's clashing
 
@@ -55,5 +55,5 @@ and make every page look deliberate at every width.
 
 ## Next
 
-Josh picks a direction. After the plugins are in, their audits run over the same pages, and then the
+The owner picks a direction. After the plugins are in, their audits run over the same pages, and then the
 edits get planned.

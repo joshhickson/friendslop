@@ -1,7 +1,7 @@
 # Retro games in the browser, each player with their own copy
 
 Research, 2026-10-31. Nothing here is decided or built. It follows
-[the Quiver research](2026-10-31-quiver-games-multiplayer.md): Josh ruled out streaming video because
+[the Quiver research](2026-10-31-quiver-games-multiplayer.md): streaming video was ruled out because
 of the lag, and asked about emulators instead.
 
 ## The idea
@@ -56,7 +56,7 @@ Start with the small consoles.
 ## What exists, and what's missing
 
 - **EmulatorJS** (GPL-3.0) is the most complete browser emulator, with 49 cores served from jsDelivr.
-  But its multiplayer streams the host's screen as video, the approach Josh ruled out, and only the
+  But its multiplayer streams the host's screen as video, the approach ruled out above, and only the
   host needs the game.
 - **Nostalgist.js** (MIT) wraps the same emulators and loads them from jsDelivr. It can save and load
   state, but it can't step exactly one frame or set each player's input for a frame, so lockstep would
@@ -114,8 +114,8 @@ build) can be driven one frame at a time, or whether a core has to be built with
 
 ## Spike results (2026-10-31)
 
-Josh said yes to the spike. It's on the local branch `spike/nes-lockstep` (`games/nes-lockstep/`,
-not pushed), and the test script is `.superpowers/tools/nes-spike-test.mjs` (git-ignored).
+The spike is on the branch `spike/nes-lockstep` (`games/nes-lockstep/`). Its test script was kept
+outside the repo.
 
 **What it used.** jsnes 2.1.0 (Apache-2.0), an NES emulator written in plain JavaScript. It can run
 exactly one frame and set each controller's buttons, so it needed no WebAssembly and no frame
@@ -156,7 +156,7 @@ change worth making.
 
 ### On the live site (2026-10-31)
 
-Josh said yes to a real-lag test. The spike branch is pushed (`spike/nes-lockstep`, which Render
+Next came a real-lag test. The spike branch is pushed (`spike/nes-lockstep`, which Render
 doesn't deploy), and the lobby now has an input delay setting. The same script then played the game
 on play.friendslop.us, both browsers on this PC, so each press went through Render and the host's
 browser and back, like two laptops on one home network:
@@ -171,13 +171,12 @@ So with today's path (sender, server, host, server, receiver) a press needs abou
 from the same network. Sending presses from the server straight to every player removes the host
 leg, which should bring it near 3. The forced drift was caught on the live site too.
 
-## For Josh to decide
+## Still to decide
 
-1. How it feels to play by hand, from two laptops (Josh is testing, 2026-10-31).
+1. How it feels to play by hand, from two laptops (not recorded yet).
 2. Whether to make the server send presses straight to every player.
 3. Which console to aim at after the NES.
 
 ## Sources
 
-The two research notes behind this, with every link, are kept locally in
-`.superpowers/research/2026-10-31-emulators/` (git-ignored).
+The two research notes behind this, with every link, were kept outside the repo.

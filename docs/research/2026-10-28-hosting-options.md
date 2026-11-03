@@ -16,10 +16,9 @@ server once (`client/js/frame-host.js`), and the server sends a copy to every pl
 Control Points match each player receives about 0.22 MB a minute, packed, so 150 MB a day covers
 about 690 player-minutes: one full room for about 35 minutes.
 
-Josh, 2026-10-28: don't copy game-night's mechanic (each group runs it from its own Google Sheet and
+Decided 2026-10-28: don't copy game-night's mechanic (each group runs it from its own Google Sheet and
 Apps Script), because it risks breaking Google's terms. Look for hosting ideas that weren't
-considered before. Already considered in the hosting design
-(`docs/superpowers/specs/2026-10-26-game-hosting-design.md`): a card on file at Render ($0.15 per GB
+considered before. Already considered in the first hosting design (26 Oct): a card on file at Render ($0.15 per GB
 past 5 GB) and Oracle Cloud's free VM (10 TB a month).
 
 One thing to know whatever we choose: Render's own page says its free instances are not for
@@ -81,7 +80,7 @@ times as much, with no new account and no new bill.
 - **STUN.** Browsers need a STUN server to find a direct path. Cloudflare documents
   `stun.cloudflare.com` as "free and unlimited" (https://developers.cloudflare.com/realtime/turn/faq/).
   Google's `stun.l.google.com` is widely used, but I found no Google page offering it to other sites,
-  so it's out under Josh's terms rule.
+  so it's out under the terms rule above.
 - **Building it.** Medium to large: a second transport in `client/js/frame-host.js`, the fan-out
   copied from `server/remote-match.js` into the host's page, signaling messages in
   `shared/protocol.js`, fallback when a channel fails, and tests. The game API and every game stay
@@ -129,7 +128,7 @@ roughly halve the traffic on any of these options. That's a game change. The pla
 
 | Idea | Why not |
 |---|---|
-| Each group runs it from its own Google Sheet (game-night) | Josh: Google terms risk |
+| Each group runs it from its own Google Sheet (game-night) | Google terms risk |
 | Signaling or relaying over public MQTT brokers, Nostr relays or BitTorrent trackers (the Trystero library) | Every operator that says anything calls it testing only (test.mosquitto.org, HiveMQ, EMQX); the rest state nothing. We don't need them: our own server can do the signaling |
 | The host's PC through a Cloudflare quick tunnel, for real use | Cloudflare: "intended for testing and development". `npm run tunnel` stays as a testing tool |
 | ngrok free | 1 GB a month |
@@ -144,15 +143,14 @@ roughly halve the traffic on any of these options. That's a game change. The pla
 | Hathora | Reported shut down in May 2026 (third-party report, not confirmed) |
 | Several free accounts at one provider to add up allowances | Most providers' terms forbid it (not checked one by one) |
 
-## For Josh to decide
+## Still to decide
 
 1. Whether to try the host-carries-its-room idea, starting with the one-evening spike.
 2. Which of the four IP address choices friendslop should make.
 3. Whether to ask Cloudflare in writing about game data on its free TURN, and about Workers for a
-   game relay. Josh would create the account and send the question.
+   game relay. The owner would create the account and send the question.
 
 ## Sources
 
-The three research notes behind this, with every link, are kept locally in
-`.superpowers/research/2026-10-28-hosting/` (git-ignored): WebRTC and TURN, hosted relays and their
+The three research notes behind this, with every link, were kept outside the repo: WebRTC and TURN, hosted relays and their
 free tiers, and less usual ideas. The links that matter most are inline above.

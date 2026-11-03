@@ -10,6 +10,7 @@ import { confirmFirstLook, unreviewedBanner } from '../unreviewed.js';
 import { C2S } from '/shared/protocol.js';
 import { COPY } from '/shared/copy.js';
 import { parseRef, repoKey } from '/shared/gameref.js';
+import { isSignedOff } from '/shared/signed-off.js';
 
 const CHAT_FADE_MS = 8000;
 
@@ -25,7 +26,8 @@ export function matchScreen(net, app) {
   const loading = h('div.loading', `Loading ${room.game.name}…`);
   const el = ref
     ? h('div.match-col',
-      unreviewedBanner({ repo: `${ref.user}/${ref.repo}`, maker: ref.user, reportUrl: store.hello?.remote?.reportUrl ?? '', commit: ref.commit, path: ref.path }),
+      // A game Josh has signed off on plays without the "nobody has played this" banner.
+      isSignedOff(ref) ? null : unreviewedBanner({ repo: `${ref.user}/${ref.repo}`, maker: ref.user, reportUrl: store.hello?.remote?.reportUrl ?? '', commit: ref.commit, path: ref.path }),
       h('div.match-stage', root, hud, overlay, loading))
     : h('div', { style: { position: 'absolute', inset: 0 } }, root, hud, overlay, loading);
 

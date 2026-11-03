@@ -126,9 +126,10 @@ home screen and gets a room link to send to friends. Nobody downloads or hosts a
   network requests. It does not stop a game from, for example, navigating its frame or using WebRTC, which can reach
   an outside server and reveal a player's IP address, or from showing a fake login box.
   Players see a first-look warning about the IP address once per repo, and an unreviewed game wears a
-  banner with the maker, the repo and a report link. `blocklist.json` retires a repo.
+  banner with the maker, the repo and a report link. Games that have been played and signed off
+  (`shared/signed-off.js`) skip the banner. `blocklist.json` retires a repo.
 - **The host can cheat.** Their browser runs the rules, so they can change scores, and they control the
-  lobby bots. The banner says so.
+  lobby bots. The banner on an unreviewed game says so.
 - **The server checks every relayed item:** only the host can relay, and only for its own room; stat keys
   match `^[A-Za-z0-9_]{1,32}$` with at most 32 per player; scores, teams and players must exist; sizes and
   rates are limited, and relayed messages count toward `DAILY_TRAFFIC_MB`.

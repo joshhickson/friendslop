@@ -4,12 +4,11 @@ Research, 2026-10-31. Nothing here is decided or built.
 
 ## The question
 
-Josh, 2026-10-31: look into making friendslop work with the games Quiver Launcher installs, so that
+The question, 2026-10-31: could friendslop work with the games Quiver Launcher installs, so that
 only the host does the setup. The host serves the files, drops a link and a room code, and friends
 join in their browser and play.
 
-Quiver Launcher (`tgeorgiadis/quiver-launcher`, cloned to `D:\dev\quiver-launcher`) is a desktop app
-that finds, installs and updates games people release on GitHub and GitLab: PC ports, recompilations
+Quiver Launcher (an open-source project on GitHub) is a desktop app that finds, installs and updates games people release on GitHub and GitLab: PC ports, recompilations
 and fan remakes. Its catalog is public at `https://api.quiverlauncher.com/api/v1`.
 
 ## What's in the catalog
@@ -100,11 +99,11 @@ the Business Source License 1.1, and each version becomes MIT licensed a year af
 ## Suggested first step
 
 A one-evening spike, with nothing built for friendslop yet: stream one free local multiplayer game
-from Josh's PC to a friend's browser and see how it feels. C-Dogs SDL is a good pick. It's free, it's
+from the host's PC to a browser on another machine and see how it feels. C-Dogs SDL is a good pick. It's free, it's
 in Quiver's catalog, and it has 4-player local co-op. The spike answers three things: whether a plain
 browser can join, what the host's upload has to be, and whether the lag is acceptable.
 
-## For Josh to decide
+## Still to decide
 
 1. Whether streaming is worth exploring, given that the host would install a small program.
 2. Whether to run the spike.
@@ -113,4 +112,4 @@ browser can join, what the host's upload has to be, and whether the lag is accep
 
 Catalog figures come from `https://api.quiverlauncher.com/api/v1/apps`, read on 2026-10-31. The
 multiplayer READMEs were read from each project's GitHub repository the same day. The scripts and
-their output are kept locally in `.superpowers/research/2026-10-31-quiver/` (git-ignored).
+their output were kept outside the repo.

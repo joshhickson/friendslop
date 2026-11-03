@@ -104,7 +104,7 @@ test('dev CDN serves the repo with CORS only when enabled', async () => {
       'traversal inside an allowed folder': 'shared/../server/rooms.js',
       'a stream suffix': 'package.json::$DATA',
       'a trailing dot': 'server.js.',
-      'docs': 'docs/superpowers/specs/2026-10-26-game-hosting-design.md',
+      'docs': 'docs/making-a-game.md',
     };
     for (const [what, p] of Object.entries(blocked)) assert.equal((await dev(p)).status, 404, what);
     assert.equal((await get(on.port, '/dev-cdn/gh/x/y@short/package.json')).status, 404, 'needs a full commit');

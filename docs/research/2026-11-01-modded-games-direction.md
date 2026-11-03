@@ -4,27 +4,21 @@ Notes to sit on, 2026-11-01. Nothing here is decided or to be built yet.
 
 ## Why this note
 
-Josh, 2026-11-01, after talking with his friends:
-
-- They suggested a light Jackbox-style game next week. Trivia Blast from Rumpus
-  (branch `spike/rumpus-trivia`) will probably be the demo.
-- **Their real interest is modded games.** Two examples came up: Halo Wars 2's Terminus Firefight,
-  which "would go hard in online multiplayer", and the custom Zombies maps for Call of Duty: Black
-  Ops III, whose makers are respected for maps that look and play like the official ones.
-- **The main goal is getting 2D and 3D games to work reliably.**
-- Josh asked to revisit the earlier notes on where the game industry, modding, ROMs and AI reverse
-  engineering are heading, and his view that multiplayer and access are the next bottleneck.
+Two examples of modded and co-op games came up as the kind of thing people want to play together:
+Halo Wars 2's Terminus Firefight, and the custom Zombies maps for Call of Duty: Black Ops III, whose
+makers are respected for maps that look and play like the official ones. The direction for
+friendslop stays the same: **get 2D and 3D games working reliably.** This note also revisits the
+earlier notes on where games, modding, ROMs and AI reverse engineering are heading, and the view that
+multiplayer and access are the next bottleneck.
 
 ## What the earlier notes said
 
-The two reports Josh gave on 2026-10-25 were discussed in chat but never saved in this repo. Copies
-of both, and an excerpt of that chat with the GitHub checks, are now kept locally in
-`.superpowers/research/2026-10-25-reports/` (git-ignored). In short:
+Two outside research reports from 2026-10-25 were discussed but never saved in this repo; copies are
+kept outside it. In short:
 
 - **"Cutting-Edge Game Rewrites"** (a Gemini report, no sources) described three movements:
   1. AI-assisted rewrites from scratch in Rust/WebAssembly or three.js, playable instantly in a
-     browser, including on phones. Josh saw one, a Minecraft-like game on his iPhone, and said he wants
-     to explore Rust and modern game rewrites later (session notes, 2026-10-25).
+     browser, including on phones. Rust and modern game rewrites are worth exploring later.
   2. AI-assisted decompilation and recompilation of old games to WebAssembly: Quake and Doom ports,
      OpenRA, the Mario 64 decompilation. The report also claimed Halo and Wind Waker work, which I
      marked as doubtful.
@@ -61,11 +55,10 @@ Nightmare expansion: build a base and hold off endless waves of UNSC, Banished a
   crossplay since a November 2017 patch ([TweakTown](https://www.tweaktown.com/news/59749/halo-wars-2-now-xbox-one-pc-cross-play-enabled/index.html),
   [Microsoft Store](https://apps.microsoft.com/detail/9plsbtjb87q7)). Whether crossplay still
   works today, I haven't checked.
-- So the hard part for Josh's friends is probably getting set up: everyone needs Halo Wars 2 on a
+- So the hard part for a group is probably getting set up: everyone needs Halo Wars 2 on a
   Windows PC or an Xbox, with the expansion, signed in to Xbox.
-- **The Halo Wars first-person mod:** two searches found none, only overhaul mods, a Battlefront II
-  conversion with Halo Wars units, and third-person mods for Halo 1 and 2. Worth asking the friends
-  for a link.
+- **A Halo Wars first-person mod:** two searches found none, only overhaul mods, a Battlefront II
+  conversion with Halo Wars units, and third-person mods for Halo 1 and 2.
 
 **Black Ops III custom Zombies:**
 
@@ -84,14 +77,14 @@ Nightmare expansion: build a base and hold off endless waves of UNSC, Banished a
 My read of why the maps look official: the makers have the developer's own editor, the developer's
 own art, and the developer's maps to copy from, and one click gets their map to players. The skill
 and the effort are theirs, and the platform removed everything else in the way. That's a guess from
-the sources above. Asking the friends what makes a map great to them would test it.
+the sources above.
 
-## Josh's thesis, laid out
+## The thesis, laid out
 
 Making games is getting cheaper fast: AI writes code, decompilations turn old games into source,
 and the browser runs 3D well. What stays hard is **getting a group of friends into the same game at
 the same time**: everyone owning and installing the same thing, the same version, a host, a working
-connection. That's the bottleneck Josh named, and it's friendslop's whole pitch: send a link, play.
+connection. That's the bottleneck, and it's friendslop's whole pitch: send a link, play.
 
 The examples sort into three groups by how hard that is.
 
@@ -132,28 +125,9 @@ The part that transfers is the setup, which friendslop can copy for its own game
 - **Hosting.** The free Render plan allows 150 MB a day, and a 3D action game moves far more data
   than trivia.
 
-## Questions to sit on
+## What this means for Halo Wars
 
-1. Do the friends want to play Halo Wars 2 and Black Ops III themselves, or would they be as happy
-   with friendslop games that have that quality and a mod scene of their own? The answer decides
-   whether group three matters.
-2. Is a level editor (the Radiant idea) the next big piece for 3D, ahead of more games?
-3. Which matters more for next week's friends test: the trivia demo going smoothly, or showing them
-   one 3D game?
-4. Where does the Rust/WebAssembly interest go: a faster 3D client later, or a way to run old engines
-   in the browser?
-
-## Josh's answers, 2026-11-01
-
-1. The friends want Halo Wars 2, or a first-person Halo, with friends. Josh expects both would need
-   custom modding for multiplayer.
-2. No decision on a level editor. He wants a **study of the modding community**: why mods appeal, and
-   large mod sites such as Nexus Mods.
-3. **For the friends test: one 3D game with working multiplayer, ideally Halo Wars 2 or Halo Wars 1,
-   by Saturday 2026-11-07.**
-4. He raised Rust because people are rewriting games in it, and guesses it makes faster clients.
-
-What I found after his answers (fan and store sources, not checked by playing):
+What I found (fan and store sources, not checked by playing):
 
 - **Halo Wars 2 still has online play in 2026,** with quick matchmaking and a small share of
   Terminus Firefight matches, on Xbox and on Windows through the Microsoft Store, Xbox app and Game
@@ -166,5 +140,14 @@ What I found after his answers (fan and store sources, not checked by playing):
   (Firebase, Haruspis).
 - **Halo Wars can't run in friendslop.** Microsoft owns its code and art, there's no source, and
   rebuilding it would be a copy of a specific game. A Halo Wars night would run in the games
-  themselves. Keeping everyone on the same mod version is the friction there, which ties into the
-  community study.
+  themselves. Keeping everyone on the same mod version is the friction there.
+- **An original game in the same genre can.** A small co-op base-defence game against waves, with
+  its own name, units and art, is the kind of 3D game friendslop is for. The limits above (lag,
+  traffic, file size) apply to it like any other.
+
+## Open questions
+
+1. Is a level editor (the Radiant idea) the next big piece for 3D, ahead of more games?
+2. A study of the modding community: why mods appeal, and how large mod sites such as Nexus Mods work.
+3. Where does the Rust/WebAssembly interest go: a faster 3D client later, or a way to run old engines
+   in the browser?
