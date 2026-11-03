@@ -7,7 +7,7 @@ Checked 2026-11-02/03 by the session that made this branch.
 
 Josh's standing rules: no keys, tokens, IP addresses, health details or pay figures; no emails except
 his public contact address on his own domain (his call, Nov 2); nothing specific about his relatives;
-other people by role; never say he can't code or doesn't read code; never open, print or copy `.env`
+other people by role; describe the build only as "agents wrote the code under my direction"; never open, print or copy `.env`
 or credential files. Plus his Nov 2 decision: delete the process notes in his name.
 
 ## How

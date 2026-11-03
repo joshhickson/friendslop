@@ -121,8 +121,7 @@ And may the page name Halo Wars as the inspiration?"
 - Josh's prose rule for anything he publishes: hyphens only, no em or en dashes, and no
   "this, not that" phrasing.
 - Josh's pronouns are he/him. Other people are named by role only.
-- Never say Josh can't code or doesn't read code, and don't say he wrote the code. "Agents wrote the
-  code under my direction" is the line.
+- Describe how it was built only as "Agents wrote the code under my direction."
 - Don't credit individual ideas to Josh or to the agents: "Directed by Josh" covers it.
 - The demo banner change (no "Nobody at friendslop has played this yet" on the demo) is on branch
   `portfolio/nov4` only. Until Josh merges it, the live demo still shows that banner. The screenshots
